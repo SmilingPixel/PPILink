@@ -2,17 +2,15 @@ import torch.nn as nn
 import torch
 from transformers import BertModel
 
-BERT_SMALL_H = 512
-BERT_BASE_H = 768
 
-class Model(nn.Module):
-    def __init__(self, bert_model: BertModel):
-        super(Model, self).__init__()
+class PILinkModel(nn.Module):
+    def __init__(self, bert_model: BertModel, bert_h_size: int):
+        super(PILinkModel, self).__init__()
         self.bert_model = bert_model
         self.linears = nn.Sequential(
-            nn.Linear(BERT_SMALL_H * 2, BERT_SMALL_H),
+            nn.Linear(bert_h_size * 2, bert_h_size),
             nn.ReLU(),
-            nn.Linear(BERT_SMALL_H, 1),
+            nn.Linear(bert_h_size, 1),
             nn.Sigmoid()
         )
       

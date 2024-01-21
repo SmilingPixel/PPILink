@@ -7,6 +7,11 @@ from typing import Optional
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+from transformers import BertModel, BertTokenizer
+
+from model.model import PILinkModel
+from dataset.pi_link_dataset import PILinkDataset
 
 
 logging.basicConfig(
@@ -44,6 +49,24 @@ def main():
     )
     parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
         help="The model checkpoint for weights initialization."
+    )
+
+    # dataset related
+    parser.add_argument(
+        "--train_file", type=str, default=None,
+        help="The input training data file (json)."
+    )
+    parser.add_argument(
+        "--eval_file", type=str, default=None,
+        help="The input evaluation data file (json)."
+    )
+    parser.add_argument(
+        "--test_file", type=str, default=None,
+        help="The input test data file (json)."
+    )
+    parser.add_argument(
+        "--max_seq_length", default=None, type=int,
+        help="The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences shorter will be padded. If left unset or set to None, this will use the predefined model maximum length"
     )
 
     # action config
@@ -110,8 +133,18 @@ def main():
     # set up random seed
     set_seed(args.seed)
 
-    # TODO: initialize model
-    model: Optional[torch.nn.Module] = None
+    # initialize model
+    bert_model: BertModel = BertModel.from_pretrained(args.model_name_or_path)
+    main_model: nn.Module = PILinkModel(bert_model, bert_model.config.hidden_size)
+
+    # initialize dataset
+    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
+    dataset: Dataset = PILinkDataset(args.train_file, bert_tokenizer) # TODO: train, eval and test
+    dataloader: DataLoader = DataLoader(
+        dataset,
+        batch_size=args.train_batch_size,
+        shuffle=True,
+    )
 
     # TODO
     if not args.do_train and not args.do_eval and not args.do_test:
