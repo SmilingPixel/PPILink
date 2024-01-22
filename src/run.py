@@ -22,6 +22,40 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def train(
+    dataloader: DataLoader,
+    model: nn.Module,
+    device: torch.device | str,
+    loss_fn: nn.Module,
+    optimizer: torch.optim.Optimizer
+) -> None:
+    """
+    Train the model.
+    """
+    model.train()
+    total_size = len(dataloader.dataset)
+    for batch_idx, (input1, input2, label) in enumerate(dataloader):
+        for value in input1.values():
+            value.to(device)
+        for value in input2.values():
+            value.to(device)
+        label.to(device)
+
+        # forward
+        pred = model(input1, input2)
+        loss = loss_fn(pred, label)
+
+        # backward
+        loss.backward()
+        optimizer.step()
+        optimizer.zero_grad()
+
+        # output log
+        if batch_idx % 10 == 0:
+            loss, current = loss.item(), (batch_idx + 1) * len(input1)
+            logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+
+
 def set_seed(seed: int) -> None:
     """
     Set all random seed for reproducibility.
@@ -91,6 +125,10 @@ def main():
         "--num_train_epochs", default=32, type=int,
         help="Total number of training epochs."
     )
+    parser.add_argument(
+        "num_train_epochs", default=32, type=int,
+        help="Total number of training epochs."
+    )
 
 
     parser.add_argument(
@@ -134,8 +172,8 @@ def main():
     set_seed(args.seed)
 
     # initialize model
-    bert_model: BertModel = BertModel.from_pretrained(args.model_name_or_path)
-    main_model: nn.Module = PILinkModel(bert_model, bert_model.config.hidden_size)
+    bert_model: BertModel = BertModel.from_pretrained(args.model_name_or_path).to(device)
+    main_model: nn.Module = PILinkModel(bert_model, bert_model.config.hidden_size).to(device)
 
     # initialize dataset
     bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
@@ -146,13 +184,25 @@ def main():
         shuffle=True,
     )
 
-    # TODO
     if not args.do_train and not args.do_eval and not args.do_test:
         raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
     if int(args.do_train) + int(args.do_eval) + int(args.do_test) > 1:
         raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
+    
     if args.do_train:
-        ...
+        # freeze parameters of bert model
+        for param in main_model.bert_model.parameters():
+            param.requires_grad = False
+        
+        # set up optimizer
+        optimizer: torch.optim.Optimizer = torch.optim.SGD(main_model.parameters(), lr=args.learning_rate)
+        loss_fn: nn.Module = nn.BCELoss()
+
+        # train
+        for epoch in range(args.num_train_epochs):
+            logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
+            train(dataloader, main_model, device, loss_fn, optimizer)
+    
     elif args.do_eval:
         ...
     elif args.do_test:
