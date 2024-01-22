@@ -70,10 +70,11 @@ class PILinkDataset(Dataset):
         self.max_input_length: Optional[int] = max_input_length
 
     def __len__(self):
-        return len(self.raw_dataset)
+        return len(self.links)
 
     def __getitem__(self, idx):
-        issue_idx, pr_idx, link = self.links[idx]
+        link_info = self.links[idx]
+        issue_idx, pr_idx, link = link_info['issue_idx'], link_info['pr_idx'], link_info['link']
         # TODO: consider more than title
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]
         issue_title, pr_title = issue['title'], pr['title']
@@ -93,4 +94,8 @@ class PILinkDataset(Dataset):
             truncation=True,
             max_length=self.max_input_length,
         )
-        return issue_inputs, pr_inputs, torch.tensor([link_int], dtype=torch.int8)
+        for key in issue_inputs.keys():
+            issue_inputs[key] = issue_inputs[key].squeeze(0)
+        for key in pr_inputs.keys():
+            pr_inputs[key] = pr_inputs[key].squeeze(0)
+        return issue_inputs, pr_inputs, torch.tensor([link_int], dtype=torch.float32)

@@ -69,10 +69,6 @@ def set_seed(seed: int) -> None:
 
 
 def main():
-    """
-    TODO:
-    - load model path
-    """
 
     parser = argparse.ArgumentParser()
 
@@ -99,7 +95,7 @@ def main():
         help="The input test data file (json)."
     )
     parser.add_argument(
-        "--max_seq_length", default=None, type=int,
+        "--max_seq_length", default=512, type=int,
         help="The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences shorter will be padded. If left unset or set to None, this will use the predefined model maximum length"
     )
 
@@ -125,15 +121,16 @@ def main():
         "--num_train_epochs", default=32, type=int,
         help="Total number of training epochs."
     )
-    parser.add_argument(
-        "num_train_epochs", default=32, type=int,
-        help="Total number of training epochs."
-    )
 
-
+    # other
     parser.add_argument(
         '--seed',type=int, default=3407, # arXiv:2109.08203
         help='random seed'
+    )
+
+    parser.add_argument(
+        'save_steps', type=int, default=10,
+        help='steps (epochs) to save model'
     )
 
     # running config
@@ -177,7 +174,11 @@ def main():
 
     # initialize dataset
     bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
-    dataset: Dataset = PILinkDataset(args.train_file, bert_tokenizer) # TODO: train, eval and test
+    dataset: Dataset = PILinkDataset(
+        args.train_file,
+        bert_tokenizer,
+        max_input_length=args.max_seq_length
+    ) # TODO: train, eval and test
     dataloader: DataLoader = DataLoader(
         dataset,
         batch_size=args.train_batch_size,
@@ -202,6 +203,10 @@ def main():
         for epoch in range(args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
             train(dataloader, main_model, device, loss_fn, optimizer)
+
+        # save_model
+        # model name: epoch_{epoch}_lr_{lr}_bs_{bs}.pt
+        torch.save(main_model.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{epoch}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
     
     elif args.do_eval:
         ...
