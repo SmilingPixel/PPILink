@@ -1,5 +1,6 @@
 # Ignore generated data and intermediate files
 data/*
+output/
 
 # virtual environment files
 venv*/
@@ -15,4 +16,21 @@ commands.txt
 
 # model files
 models/*
+
+# byte-compiled
+__pycache__/
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Cython debug symbols
+cython_debug/
 
