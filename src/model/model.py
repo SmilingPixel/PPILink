@@ -22,3 +22,6 @@ class PILinkModel(nn.Module):
         vec = torch.cat((issue_vec, pr_vec), dim=1)
         out = self.linears(vec)
         return out
+    
+    def load_linears_state_dict(self, state_dict):
+        self.linears.load_state_dict(state_dict)
