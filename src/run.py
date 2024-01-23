@@ -34,12 +34,13 @@ def train(
     """
     model.train()
     total_size = len(dataloader.dataset)
+    batch_size = dataloader.batch_size
     for batch_idx, (input1, input2, label) in enumerate(dataloader):
-        for value in input1.values():
-            value.to(device)
-        for value in input2.values():
-            value.to(device)
-        label.to(device)
+        for key in input1:
+            input1[key] = input1[key].to(device)
+        for key in input2:
+            input2[key] = input2[key].to(device)
+        label = label.to(device)
 
         # forward
         pred = model(input1, input2)
@@ -51,8 +52,8 @@ def train(
         optimizer.zero_grad()
 
         # output log
-        if batch_idx % 10 == 0:
-            loss, current = loss.item(), (batch_idx + 1) * len(input1)
+        if (batch_idx + 1) % 10 == 0:
+            loss, current = loss.item(), (batch_idx + 1) * batch_size
             logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
 
 
@@ -129,7 +130,7 @@ def main():
     )
 
     parser.add_argument(
-        'save_steps', type=int, default=10,
+        '--save_steps', type=int, default=10,
         help='steps (epochs) to save model'
     )
 
@@ -157,7 +158,7 @@ def main():
     elif args.device == 'cuda':
         if not torch.cuda.is_available():
             raise ValueError('cuda is not available')
-        device = f'cuda{args.device_id}'
+        device = f'cuda:{args.device_id}'
     elif args.device == 'dml':
         import torch_directml
         device = torch_directml.device(args.device_id)
@@ -205,8 +206,11 @@ def main():
             train(dataloader, main_model, device, loss_fn, optimizer)
 
         # save_model
+        # Since we freeze parameters of BERT model, we only save parameters of linears of main_model
+        # check if {output_dir}/ckpt exists
+        os.makedirs(os.path.join(output_dir, 'ckpt'), exist_ok=True)
         # model name: epoch_{epoch}_lr_{lr}_bs_{bs}.pt
-        torch.save(main_model.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{epoch}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
+        torch.save(main_model.linears.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{epoch}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
     
     elif args.do_eval:
         ...
