@@ -42,6 +42,8 @@ def train(
             input2[key] = input2[key].to(device)
         label = label.to(device)
 
+        optimizer.zero_grad()
+
         # forward
         pred = model(input1, input2)
         loss = loss_fn(pred, label)
@@ -49,11 +51,10 @@ def train(
         # backward
         loss.backward()
         optimizer.step()
-        optimizer.zero_grad()
 
         # output log
         if (batch_idx + 1) % 10 == 0:
-            loss, current = loss.item(), (batch_idx + 1) * batch_size
+            loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
             logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
 
 
@@ -107,7 +108,7 @@ def main():
 
     # hyperparameters
     parser.add_argument(
-        "--train_batch_size", default=4, type=int, 
+        "--train_batch_size", default=16, type=int, 
         help="Batch size for training."
     )
     parser.add_argument(
@@ -115,7 +116,7 @@ def main():
         help="Batch size for evaluation."
     )
     parser.add_argument(
-        "--learning_rate", default=5e-5, type=float,
+        "--learning_rate", default=0.1, type=float,
         help="The initial learning rate."
     )
     parser.add_argument(
@@ -197,7 +198,13 @@ def main():
             param.requires_grad = False
         
         # set up optimizer
-        optimizer: torch.optim.Optimizer = torch.optim.SGD(main_model.parameters(), lr=args.learning_rate)
+        optimizer: torch.optim.Optimizer = torch.optim.SGD(
+            [
+                {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
+            ],
+            lr=args.learning_rate,
+            momentum=0.9,
+        )
         loss_fn: nn.Module = nn.BCELoss()
 
         # train
@@ -210,7 +217,7 @@ def main():
         # check if {output_dir}/ckpt exists
         os.makedirs(os.path.join(output_dir, 'ckpt'), exist_ok=True)
         # model name: epoch_{epoch}_lr_{lr}_bs_{bs}.pt
-        torch.save(main_model.linears.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{epoch}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
+        torch.save(main_model.linears.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{args.num_train_epochs}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
     
     elif args.do_eval:
         ...
