@@ -13,8 +13,8 @@ from transformers import PreTrainedTokenizer
 #     {
 #       "cluster": int,
 #       "url": str,
-#       "title": str,
-#       "body": str,
+#       "title": List[str],
+#       "body": List[str],
 #       "repo": str,
 #       "created_at": str,
 #       "closed_at": str or None
@@ -25,8 +25,8 @@ from transformers import PreTrainedTokenizer
 #     {
 #       "cluster": int,
 #       "url": str,
-#       "title": str,
-#       "body": str,
+#       "title": List[str],
+#       "body": List[str],
 #       "repo": str,
 #       "created_at": str,
 #       "closed_at": str or None
