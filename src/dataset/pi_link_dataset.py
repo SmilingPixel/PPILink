@@ -3,7 +3,6 @@ import pathlib
 from typing import List, Optional, Tuple, Union
 
 import torch
-import transformers
 from torch.utils.data import Dataset
 from transformers import PreTrainedTokenizer
 
@@ -77,22 +76,24 @@ class PILinkDataset(Dataset):
         issue_idx, pr_idx, link = link_info['issue_idx'], link_info['pr_idx'], link_info['link']
         # TODO: consider more than title
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]
-        issue_title, pr_title = issue['title'], pr['title']
+        issue_nl, pr_nl = issue['title'], pr['title'] # both of their types are list of str (list of tokens)
         link_int = int(link) # 0 or 1
 
         issue_inputs = self.tokenizer(
-            issue_title,
+            issue_nl,
             return_tensors='pt',
             padding='max_length',
             truncation=True,
             max_length=self.max_input_length,
+            is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
         )
         pr_inputs = self.tokenizer(
-            pr_title,
+            pr_nl,
             return_tensors='pt',
             padding='max_length',
             truncation=True,
             max_length=self.max_input_length,
+            is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
         )
         for key in issue_inputs.keys():
             issue_inputs[key] = issue_inputs[key].squeeze(0)

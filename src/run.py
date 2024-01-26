@@ -2,13 +2,13 @@ import argparse
 import logging
 import os
 import random
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertModel, BertTokenizer
+from transformers import BertModel, BertTokenizer, RobertaModel
 
 from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
@@ -79,9 +79,18 @@ def main():
         "--output_dir", type=str, default='output', required=True,
         help="The output directory where the model checkpoints and test results will be saved."
     )
-    parser.add_argument("--model_name_or_path", default=None, type=str, required=True,
+    parser.add_argument("--nlp_model_name_or_path", default=None, type=str, required=True,
+        help="The model used to process nl into vector embeddings."
+    )
+    parser.add_argument("--code_model_name_or_path", default=None, type=str, required=True,
+        help="The model used to process code into vector embeddings."
+    )
+
+    # optional: load model from checkpoint
+    parser.add_argument("--main_model_name_or_path", default=None, type=str,
         help="The model checkpoint for weights initialization."
     )
+    
 
     # dataset related
     parser.add_argument(
@@ -171,11 +180,19 @@ def main():
     set_seed(args.seed)
 
     # initialize model
-    bert_model: BertModel = BertModel.from_pretrained(args.model_name_or_path).to(device)
-    main_model: nn.Module = PILinkModel(bert_model, bert_model.config.hidden_size).to(device)
+    # TODO: pr code model
+    # pr_code_model: RobertaModel = RobertaModel.from_pretrained(args.code_model_name_or_path).to(device)
+    pr_code_model: Any = None
+    pr_nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
+    issue_nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
+    main_model: nn.Module = PILinkModel(
+        pr_code_model,
+        pr_nlp_model,
+        issue_nlp_model
+    ).to(device)
 
     # initialize dataset
-    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.model_name_or_path)
+    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlp_model_name_or_path)
     dataset: Dataset = PILinkDataset(
         args.train_file,
         bert_tokenizer,
