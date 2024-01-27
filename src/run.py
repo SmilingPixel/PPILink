@@ -2,6 +2,7 @@ import argparse
 import logging
 import os
 import random
+import datetime
 from typing import Any, Optional
 
 import numpy as np
@@ -14,12 +15,24 @@ from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
 
 
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
-    datefmt='%m/%d/%Y %H:%M:%S',
-    level=logging.INFO
+# use time as a unique running id
+# example: 20210909123456
+running_id: str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+
+# configure logging
+os.makedirs('logs', exist_ok=True)
+logging_format: logging.Formatter = logging.Formatter(
+    fmt='%(asctime)s - %(levelname)s - %(name)s -  %(message)s',
+    datefmt='%m/%d/%Y %H:%M:%S'
 )
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+file_handler: logging.FileHandler = logging.FileHandler(f'logs/{running_id}.log')
+file_handler.setFormatter(logging_format)
+consola_handler: logging.StreamHandler = logging.StreamHandler()
+consola_handler.setFormatter(logging_format)
+logger.addHandler(file_handler)
+logger.addHandler(consola_handler)
 
 
 def train(
@@ -210,9 +223,11 @@ def main():
         raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
     
     if args.do_train:
-        # freeze parameters of bert model
-        for param in main_model.bert_model.parameters():
+        # freeze all parameters but those of linears
+        for param in main_model.parameters():
             param.requires_grad = False
+        for param in main_model.linears.parameters():
+            param.requires_grad = True
         
         # set up optimizer
         optimizer: torch.optim.Optimizer = torch.optim.SGD(
@@ -220,7 +235,7 @@ def main():
                 {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
             ],
             lr=args.learning_rate,
-            momentum=0.9,
+            # momentum=0.9,
         )
         loss_fn: nn.Module = nn.BCELoss()
 
