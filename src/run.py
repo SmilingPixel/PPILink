@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertModel, BertTokenizer, RobertaModel
+from transformers import BertModel, BertTokenizer, RobertaModel, get_linear_schedule_with_warmup
 
 from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
@@ -40,7 +40,8 @@ def train(
     model: nn.Module,
     device: torch.device | str,
     loss_fn: nn.Module,
-    optimizer: torch.optim.Optimizer
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler
 ) -> None:
     """
     Train the model.
@@ -69,6 +70,8 @@ def train(
         if (batch_idx + 1) % 10 == 0:
             loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
             logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+    
+    scheduler.step()
 
 
 def set_seed(seed: int) -> None:
@@ -130,16 +133,36 @@ def main():
 
     # hyperparameters
     parser.add_argument(
-        "--train_batch_size", default=16, type=int, 
+        "--train_batch_size", default=32, type=int, 
         help="Batch size for training."
     )
     parser.add_argument(
-        "--eval_batch_size", default=4, type=int,
+        "--eval_batch_size", default=32, type=int,
         help="Batch size for evaluation."
     )
     parser.add_argument(
-        "--learning_rate", default=0.1, type=float,
+        "--learning_rate", default=0.002, type=float,
         help="The initial learning rate."
+    )
+    parser.add_argument(
+        "--adam_epsilon", default=1e-8, type=float,
+        help="Epsilon for Adam optimizer."
+    )
+    parser.add_argument(
+        "--adam_weight_decay", default=0.01, type=float,
+        help="Weight decay if we apply some."
+    )
+    parser.add_argument(
+        "--adam_beta1", default=0.9, type=float,
+        help="Beta1 for Adam optimizer."
+    )
+    parser.add_argument(
+        "--adam_beta1", default=0.999, type=float,
+        help="Beta2 for Adam optimizer."
+    )
+    parser.add_argument(
+        "--warmup_steps", default=10, type=int,
+        help="Linear warmup over warmup_steps."
     )
     parser.add_argument(
         "--num_train_epochs", default=32, type=int,
@@ -229,20 +252,27 @@ def main():
         for param in main_model.linears.parameters():
             param.requires_grad = True
         
-        # set up optimizer
-        optimizer: torch.optim.Optimizer = torch.optim.SGD(
+        # set up optimizer, scheduler and loss function
+        optimizer: torch.optim.Optimizer = torch.optim.AdamW(
             [
-                {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
+                {'params': main_model.linears.parameters()},
             ],
             lr=args.learning_rate,
-            # momentum=0.9,
+            eps=args.adam_epsilon,
+            weight_decay=args.adam_weight_decay,
+            betas=(args.adam_beta1, args.adam_beta2),
+        )
+        scheduler: torch.optim.lr_scheduler.LRScheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=args.warmup_steps,
+            num_training_steps=len(dataloader) * args.num_train_epochs,
         )
         loss_fn: nn.Module = nn.BCELoss()
 
         # train
         for epoch in range(args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
-            train(dataloader, main_model, device, loss_fn, optimizer)
+            train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
 
         # save_model
         # Since we freeze parameters of BERT model, we only save parameters of linears of main_model
