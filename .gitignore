@@ -34,3 +34,5 @@ ipython_config.py
 # Cython debug symbols
 cython_debug/
 
+# logs
+src/logs/
