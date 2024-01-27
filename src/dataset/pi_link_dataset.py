@@ -76,7 +76,7 @@ class PILinkDataset(Dataset):
         issue_idx, pr_idx, link = link_info['issue_idx'], link_info['pr_idx'], link_info['link']
         # TODO: consider more than title
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]
-        issue_nl, pr_nl = issue['title'], pr['title'] # both of their types are list of str (list of tokens)
+        issue_nl, pr_nl = issue['title'] + issue['body'], pr['title'] + pr['body'] # both of their types are list of str (list of tokens)
         link_int = int(link) # 0 or 1
 
         issue_inputs = self.tokenizer(
