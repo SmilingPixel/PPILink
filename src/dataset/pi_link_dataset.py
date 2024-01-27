@@ -54,7 +54,7 @@ class PILinkDataset(Dataset):
             self,
             file_path: Union[str, pathlib.Path],
             tokenizer: PreTrainedTokenizer,
-            max_input_length: Optional[int] = None,
+            max_input_length: int = 512,
         ):
         super().__init__()
 
@@ -66,7 +66,7 @@ class PILinkDataset(Dataset):
         self.links = raw_dataset['links']
 
         self.tokenizer: PreTrainedTokenizer = tokenizer
-        self.max_input_length: Optional[int] = max_input_length
+        self.max_input_length: int = max_input_length
 
     def __len__(self):
         return len(self.links)
@@ -77,26 +77,25 @@ class PILinkDataset(Dataset):
         # TODO: consider more than title
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]
         issue_nl, pr_nl = issue['title'] + issue['body'], pr['title'] + pr['body'] # both of their types are list of str (list of tokens)
+
+        # truncate if input is too long
+        max_issue_nl_len = max_pr_nl_len = (self.max_input_length - 3) // 2 # -3: [CLS] and [SEP]*2
+        if len(issue_nl) > max_issue_nl_len:
+            issue_nl = issue_nl[:max_issue_nl_len]
+        if len(pr_nl) > max_pr_nl_len:
+            pr_nl = pr_nl[:max_pr_nl_len]
+            
         link_int = int(link) # 0 or 1
 
-        issue_inputs = self.tokenizer(
-            issue_nl,
+        tokenize_res = self.tokenizer(
+            text=issue_nl,
+            text_pair=pr_nl,
             return_tensors='pt',
             padding='max_length',
             truncation=True,
             max_length=self.max_input_length,
             is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
         )
-        pr_inputs = self.tokenizer(
-            pr_nl,
-            return_tensors='pt',
-            padding='max_length',
-            truncation=True,
-            max_length=self.max_input_length,
-            is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
-        )
-        for key in issue_inputs.keys():
-            issue_inputs[key] = issue_inputs[key].squeeze(0)
-        for key in pr_inputs.keys():
-            pr_inputs[key] = pr_inputs[key].squeeze(0)
-        return issue_inputs, pr_inputs, torch.tensor([link_int], dtype=torch.float32)
+        for key in tokenize_res.keys():
+            tokenize_res[key] = tokenize_res[key].squeeze(0)
+        return tokenize_res, torch.tensor([link_int], dtype=torch.float32)

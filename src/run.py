@@ -2,9 +2,10 @@ import argparse
 import datetime
 import logging
 import os
+import pathlib
 import random
 import time
-from typing import Any, Optional
+from typing import Any, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -52,17 +53,15 @@ def train(
     total_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
     total_loss: float = 0.0
-    for batch_idx, (input1, input2, label) in enumerate(dataloader):
-        for key in input1:
-            input1[key] = input1[key].to(device)
-        for key in input2:
-            input2[key] = input2[key].to(device)
+    for batch_idx, (inputs, label) in enumerate(dataloader):
+        for key in inputs:
+            inputs[key] = inputs[key].to(device)
         label = label.to(device)
 
         optimizer.zero_grad()
 
         # forward
-        pred = model(input1, input2)
+        pred = model(inputs)
         loss = loss_fn(pred, label)
         total_loss += loss.item()
 
@@ -84,9 +83,13 @@ def test(
     dataloader: DataLoader,
     model: nn.Module,
     device: torch.device | str,
-) -> None:
+) -> Tuple[List[float], List[float]]:
     """
     Test the model.
+
+    Returns:
+        all_pred: list of predictions
+        true_labels: list of true labels
     """
     start_time: float = time.time()
     model.eval()
@@ -95,28 +98,24 @@ def test(
     all_pred: list[float] = []
     true_labels: list[float] = []
     with torch.no_grad():
-        for batch_idx, (input1, input2, label) in enumerate(dataloader):
-            for key in input1:
-                input1[key] = input1[key].to(device)
-            for key in input2:
-                input2[key] = input2[key].to(device)
+        for batch_idx, (inputs, label) in enumerate(dataloader):
+            for key in inputs:
+                inputs[key] = inputs[key].to(device)
             label = label.to(device)
 
             # forward
-            pred = model(input1, input2)
+            pred = model(inputs)
             all_pred.append(pred.item())
             true_labels.append(label.item())
 
             # output log
             if (batch_idx + 1) % 10 == 0:
-                loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
-                logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+                current = min((batch_idx + 1) * batch_size, total_size)
+                logger.info(f'[{current:>5d}/{total_size:>5d}]')
     
     end_time: float = time.time()
     logger.info(f'This epoch testing time: {end_time - start_time}s')
-
-    # TODO: calculate metrics
-    pass
+    return all_pred, true_labels
 
 
 def set_seed(seed: int) -> None:
@@ -262,20 +261,28 @@ def main():
 
     # initialize model
     # TODO: pr code model
-    # pr_code_model: RobertaModel = RobertaModel.from_pretrained(args.code_model_name_or_path).to(device)
-    pr_code_model: Any = None
-    pr_nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
-    issue_nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
+    # code_model: RobertaModel = RobertaModel.from_pretrained(args.code_model_name_or_path).to(device)
+    code_model: Any = None
+    nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
     main_model: nn.Module = PILinkModel(
-        pr_code_model,
-        pr_nlp_model,
-        issue_nlp_model
+        code_model,
+        nlp_model,
     ).to(device)
 
+    if not args.do_train and not args.do_eval and not args.do_test:
+        raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
+    if int(args.do_train) + int(args.do_eval) + int(args.do_test) > 1:
+        raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
+    
     # initialize dataset
+    file_path: Union[str, pathlib.Path] = (
+        args.train_file if args.do_train
+        else args.eval_file if args.do_eval
+        else args.test_file
+    )
     bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlp_model_name_or_path)
     dataset: Dataset = PILinkDataset(
-        args.train_file,
+        file_path,
         bert_tokenizer,
         max_input_length=args.max_seq_length
     ) # TODO: train, eval and test
@@ -284,11 +291,6 @@ def main():
         batch_size=args.train_batch_size,
         shuffle=True,
     )
-
-    if not args.do_train and not args.do_eval and not args.do_test:
-        raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
-    if int(args.do_train) + int(args.do_eval) + int(args.do_test) > 1:
-        raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
     
     if args.do_train:
         # freeze all parameters but those of linears
@@ -329,7 +331,12 @@ def main():
     elif args.do_eval:
         ...
     elif args.do_test:
-        ...
+        with torch.no_grad():
+            preds, true_labels = test(dataloader, main_model, device)
+            # TODO: calculate metrics
+            pass
+
+        
 
 
 
