@@ -167,7 +167,7 @@ def main():
         help="The input test data file (json)."
     )
     parser.add_argument(
-        "--max_seq_length", default=512, type=int,
+        "--max_seq_length", default=256, type=int,
         help="The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences shorter will be padded. If left unset or set to None, this will use the predefined model maximum length"
     )
 
