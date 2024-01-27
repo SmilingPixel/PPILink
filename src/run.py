@@ -81,8 +81,41 @@ def train(
 
 
 def test(
-        
+    dataloader: DataLoader,
+    model: nn.Module,
+    device: torch.device | str,
 ) -> None:
+    """
+    Test the model.
+    """
+    start_time: float = time.time()
+    model.eval()
+    total_size = len(dataloader.dataset)
+    batch_size = dataloader.batch_size
+    all_pred: list[float] = []
+    true_labels: list[float] = []
+    with torch.no_grad():
+        for batch_idx, (input1, input2, label) in enumerate(dataloader):
+            for key in input1:
+                input1[key] = input1[key].to(device)
+            for key in input2:
+                input2[key] = input2[key].to(device)
+            label = label.to(device)
+
+            # forward
+            pred = model(input1, input2)
+            all_pred.append(pred.item())
+            true_labels.append(label.item())
+
+            # output log
+            if (batch_idx + 1) % 10 == 0:
+                loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
+                logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+    
+    end_time: float = time.time()
+    logger.info(f'This epoch testing time: {end_time - start_time}s')
+
+    # TODO: calculate metrics
     pass
 
 
