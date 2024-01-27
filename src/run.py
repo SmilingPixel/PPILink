@@ -1,8 +1,9 @@
 import argparse
+import datetime
 import logging
 import os
 import random
-import datetime
+import time
 from typing import Any, Optional
 
 import numpy as np
@@ -46,9 +47,11 @@ def train(
     """
     Train the model.
     """
+    start_time: float = time.time()
     model.train()
     total_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
+    total_loss: float = 0.0
     for batch_idx, (input1, input2, label) in enumerate(dataloader):
         for key in input1:
             input1[key] = input1[key].to(device)
@@ -61,6 +64,7 @@ def train(
         # forward
         pred = model(input1, input2)
         loss = loss_fn(pred, label)
+        total_loss += loss.item()
 
         # backward
         loss.backward()
@@ -72,6 +76,14 @@ def train(
             logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
     
     scheduler.step()
+    end_time: float = time.time()
+    logger.info(f'This epoch training time: {end_time - start_time}s, total loss: {total_loss:.4f}')
+
+
+def test(
+        
+) -> None:
+    pass
 
 
 def set_seed(seed: int) -> None:
@@ -157,11 +169,11 @@ def main():
         help="Beta1 for Adam optimizer."
     )
     parser.add_argument(
-        "--adam_beta1", default=0.999, type=float,
+        "--adam_beta2", default=0.999, type=float,
         help="Beta2 for Adam optimizer."
     )
     parser.add_argument(
-        "--warmup_steps", default=10, type=int,
+        "--warmup_steps", default=4, type=int,
         help="Linear warmup over warmup_steps."
     )
     parser.add_argument(
@@ -265,7 +277,7 @@ def main():
         scheduler: torch.optim.lr_scheduler.LRScheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=args.warmup_steps,
-            num_training_steps=len(dataloader) * args.num_train_epochs,
+            num_training_steps=args.num_train_epochs,
         )
         loss_fn: nn.Module = nn.BCELoss()
 
