@@ -2,7 +2,7 @@ from typing import Any, List
 
 import torch.nn as nn
 import torch
-from transformers import BertModel, PreTrainedModel
+from transformers import BertModel
 
 
 class PILinkModel(nn.Module):
@@ -40,5 +40,3 @@ class PILinkModel(nn.Module):
         out = self.linears(vec)
         return out
     
-    def load_linears_state_dict(self, state_dict):
-        self.linears.load_state_dict(state_dict)

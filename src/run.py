@@ -118,6 +118,40 @@ def test(
     return all_pred, true_labels
 
 
+def save_ckpt(
+    ckpt_output_dir: Union[str, pathlib.Path],
+    model: nn.Module,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+) -> None:
+    """
+    Save checkpoint.
+    """
+    os.makedirs(ckpt_output_dir, exist_ok=True)
+    torch.save(model.state_dict(), os.path.join(ckpt_output_dir, 'model.pt'))
+    if optimizer is not None:
+        torch.save(optimizer.state_dict(), os.path.join(ckpt_output_dir, 'optimizer.pt'))
+    if scheduler is not None:
+        torch.save(scheduler.state_dict(), os.path.join(ckpt_output_dir, 'scheduler.pt'))
+
+
+def load_ckpt(
+    ckpt_output_dir: Union[str, pathlib.Path],
+    model: nn.Module,
+    optimizer: Optional[torch.optim.Optimizer] = None,
+    scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
+    device: Union[torch.device, str] = 'cpu'
+) -> None:
+    """
+    Load checkpoint.
+    """
+    model.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'model.pt'), map_location=device))
+    if optimizer is not None:
+        optimizer.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'optimizer.pt'), map_location=device))
+    if scheduler is not None:
+        scheduler.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'scheduler.pt'), map_location=device))
+        
+
 def set_seed(seed: int) -> None:
     """
     Set all random seed for reproducibility.
@@ -268,6 +302,8 @@ def main():
         code_model,
         nlp_model,
     ).to(device)
+    if args.main_model_name_or_path is not None: # load model from checkpoint
+        load_ckpt(args.main_model_name_or_path, main_model, device=device)
 
     if not args.do_train and not args.do_eval and not args.do_test:
         raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
@@ -298,6 +334,11 @@ def main():
             param.requires_grad = False
         for param in main_model.linears.parameters():
             param.requires_grad = True
+
+        # check if {output_dir}/ckpt/{running_id} exists
+        os.makedirs(os.path.join(output_dir, 'ckpt'), exist_ok=True)
+        ckpt_output_dir: str = os.path.join(output_dir, 'ckpt', str(running_id))
+        os.makedirs(ckpt_output_dir, exist_ok=True)
         
         # set up optimizer, scheduler and loss function
         optimizer: torch.optim.Optimizer = torch.optim.AdamW(
@@ -320,14 +361,14 @@ def main():
         for epoch in range(args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
             train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
+            # TODO: save optimizer and scheduler
+            if (epoch + 1) % args.save_steps == 0:
+                save_ckpt(os.path.join(ckpt_output_dir, f'epoch_{epoch + 1}'), main_model)
 
-        # save_model
-        # Since we freeze parameters of BERT model, we only save parameters of linears of main_model
-        # check if {output_dir}/ckpt exists
-        os.makedirs(os.path.join(output_dir, 'ckpt'), exist_ok=True)
-        # model name: epoch_{epoch}_lr_{lr}_bs_{bs}.pt
-        torch.save(main_model.linears.state_dict(), os.path.join(output_dir, 'ckpt', f'epoch_{args.num_train_epochs}_lr_{args.learning_rate}_bs_{args.train_batch_size}.pt'))
-    
+        # save_final_model
+        # we don't save optimizer and scheduler since training is done
+        save_ckpt(os.path.join(ckpt_output_dir, f'epoch_{args.num_train_epochs}'), main_model)
+        
     elif args.do_eval:
         ...
     elif args.do_test:
