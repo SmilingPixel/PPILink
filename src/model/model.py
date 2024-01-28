@@ -33,7 +33,7 @@ class PILinkModel(nn.Module):
         Returns:
             torch.Tensor: The output tensor from the model.
         """
-        nl_vec = self.issue_nlp_model(nl_inputs).last_hidden_state
+        nl_vec = self.nlp_model(**nl_inputs).last_hidden_state
         nl_vec = nl_vec[:,0,:] # torch.FloatTensor of shape (batch_size, sequence_length, hidden_size)
         vec = nl_vec
         # vec = torch.cat((nl_vec, code_vec), dim=1)

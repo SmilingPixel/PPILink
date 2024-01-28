@@ -74,28 +74,48 @@ class PILinkDataset(Dataset):
     def __getitem__(self, idx):
         link_info = self.links[idx]
         issue_idx, pr_idx, link = link_info['issue_idx'], link_info['pr_idx'], link_info['link']
-        # TODO: consider more than title
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]
         issue_nl, pr_nl = issue['title'] + issue['body'], pr['title'] + pr['body'] # both of their types are list of str (list of tokens)
 
-        # truncate if input is too long
-        max_issue_nl_len = max_pr_nl_len = (self.max_input_length - 3) // 2 # -3: [CLS] and [SEP]*2
-        if len(issue_nl) > max_issue_nl_len:
-            issue_nl = issue_nl[:max_issue_nl_len]
-        if len(pr_nl) > max_pr_nl_len:
-            pr_nl = pr_nl[:max_pr_nl_len]
-            
-        link_int = int(link) # 0 or 1
-
-        tokenize_res = self.tokenizer(
-            text=issue_nl,
-            text_pair=pr_nl,
+        # for some reason, we truncate the input separately by hand
+        issue_tokens: dict = self.tokenizer(
+            issue_nl,
             return_tensors='pt',
-            padding='max_length',
+            max_length=(self.max_input_length // 2),
+            padding=False,
             truncation=True,
-            max_length=self.max_input_length,
             is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
         )
-        for key in tokenize_res.keys():
-            tokenize_res[key] = tokenize_res[key].squeeze(0)
-        return tokenize_res, torch.tensor([link_int], dtype=torch.float32)
+        pr_tokens: dict = self.tokenizer(
+            pr_nl,
+            return_tensors='pt',
+            max_length=(self.max_input_length // 2 + 1), # fistr token [CLS] will be removed later
+            padding=False,
+            truncation=True,
+            is_split_into_words=True,
+        )
+
+        # make paddings
+        padding_length = self.max_input_length - issue_tokens['input_ids'].shape[1] - pr_tokens['input_ids'].shape[1] + 1 # '+1' for [CLS] of pr_tokens
+        paddings_tokens: dict = {
+            'input_ids': torch.full((padding_length,), self.tokenizer.pad_token_id),
+            'attention_mask': torch.full((padding_length,), 0),
+            'token_type_ids': torch.full((padding_length,), self.tokenizer.pad_token_type_id),
+        }
+
+        # squeeze, remove [CLS] of second one, set token type ids of second one, and concat
+        res_tokens: dict = {
+            'input_ids': torch.cat(
+                (issue_tokens['input_ids'][0], pr_tokens['input_ids'][0][1:], paddings_tokens['input_ids'])
+            ), # [1:] to remove [CLS] of pr_tokens
+            'attention_mask': torch.cat(
+                (issue_tokens['attention_mask'][0], pr_tokens['attention_mask'][0][1:], paddings_tokens['attention_mask'])
+            ),
+            'token_type_ids': torch.cat(
+                (issue_tokens['token_type_ids'][0], torch.ones_like(pr_tokens['token_type_ids'][0][1:]), paddings_tokens['token_type_ids'])
+            ),
+        }
+
+        link_int = int(link) # False, True -> 0 or 1
+
+        return res_tokens, torch.tensor([link_int], dtype=torch.float32)
