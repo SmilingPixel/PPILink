@@ -31,7 +31,7 @@ class PILinkModel(nn.Module):
         code_model: Optional[RobertaModel] = None
     ):
         super(PILinkModel, self).__init__()
-        self.confi: PILinkModelConfig = config
+        self.config: PILinkModelConfig = config
 
         self.nlp_model: BertModel = BertModel(config.nlp_model_config) if nlp_model is None else nlp_model
         # TODO: add code model
