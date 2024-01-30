@@ -6,6 +6,15 @@ from typing import Dict, List
 from sklearn.metrics import classification_report
 
 
+# testing output file schema:
+# {
+#     "true_labels": List[int],
+#     "pred_labels": List[int],
+#     "pred_prob": List[float]
+
+# }
+
+
 def generate_report(input_file: Path, output_file: Path):
     with open(input_file, 'r') as f:
         data = json.load(f)
