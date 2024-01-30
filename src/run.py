@@ -2,7 +2,7 @@ import argparse
 import datetime
 import logging
 import os
-import pathlib
+import json
 import random
 import time
 from pathlib import Path
@@ -379,11 +379,24 @@ def main():
     elif args.do_eval:
         ...
     elif args.do_test:
+        # output results to {output_dir}/test_results/{running_id}
+        test_results_dir: Path = output_dir.joinpath('test_results', str(running_id))
+        test_results_dir.mkdir(parents=True, exist_ok=True)
         with torch.no_grad():
             preds, true_labels = test(dataloader, main_model, device)
-            # TODO: calculate metrics
-            pass
 
+            pred_prob: List[float] = preds
+            pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
+
+            # output as json file
+            with open(test_results_dir.joinpath('results.json'), 'w') as f:
+                json.dump({
+                    'pred_prob': pred_prob,
+                    'pred_labels': pred_labels,
+                    'true_labels': true_labels
+                }, f)
+
+            
         
 
 
