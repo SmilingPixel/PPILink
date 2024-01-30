@@ -138,22 +138,20 @@ def save_ckpt(
         torch.save(scheduler.state_dict(), ckpt_output_dir.joinpath('scheduler.pt'))
 
 
-def load_ckpt(
+def load_opt_sched_from_ckpt(
     ckpt_output_dir: Union[str, Path],
     optimizer: Optional[torch.optim.Optimizer] = None,
     scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
     device: Union[torch.device, str] = 'cpu'
-) -> PILinkModel:
+) -> None:
     """
     Load checkpoint.
     """
     ckpt_output_dir: Path = Path(ckpt_output_dir)
-    model: PILinkModel = PILinkModel.from_trained_model(ckpt_output_dir, device=device)
     if optimizer is not None:
         optimizer.load_state_dict(torch.load(ckpt_output_dir.joinpath('optimizer.pt'), map_location=device))
     if scheduler is not None:
         scheduler.load_state_dict(torch.load(ckpt_output_dir.joinpath('scheduler.pt'), map_location=device))
-    return model
         
 
 def set_seed(seed: int) -> None:
@@ -178,15 +176,15 @@ def main():
         help="The output directory where the model checkpoints and test results will be saved."
     )
     parser.add_argument("--nlp_model_name_or_path", default=None, type=str, required=True,
-        help="The model used to process nl into vector embeddings."
+        help="The model used to process nl into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
     )
     parser.add_argument("--code_model_name_or_path", default=None, type=str, required=True,
-        help="The model used to process code into vector embeddings."
+        help="The model used to process code into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
     )
 
     # optional: load model from checkpoint
     parser.add_argument("--main_model_name_or_path", default=None, type=str,
-        help="The model checkpoint for weights initialization."
+        help="The model checkpoint dir for weights initialization. If do_train, ckpt of optimizer and scheduler should also be provided."
     )
     
 
@@ -269,7 +267,7 @@ def main():
     )
     parser.add_argument(
         '--device_id', type=int, default=0,
-        help='device id to run on'
+        help='device id to run on (only works if device is "cuda")'
     )
 
     # print arguments
@@ -300,13 +298,12 @@ def main():
     # initialize model
     # TODO: pr code model
     if args.main_model_name_or_path is not None: # load model from checkpoint
-        main_model = load_ckpt(
-            args.main_model_name_or_path,
-            main_model,
+        main_model: PILinkModel = PILinkModel.from_trained_model(
+            Path(args.main_model_name_or_path),
             device=device
         )
     else: # initialize from scratch, and load nlp model and code model from pretrained model file
-        main_model = PILinkModel.from_scratch(
+        main_model: PILinkModel = PILinkModel.from_scratch(
             args.nlp_model_name_or_path,
             args.code_model_name_or_path,
             device=device
@@ -349,8 +346,8 @@ def main():
         # set up optimizer, scheduler and loss function
         optimizer: torch.optim.Optimizer = torch.optim.AdamW(
             [
-                # {'params': main_model.linears.parameters()},
-                {'params': main_model.parameters(), 'lr': args.learning_rate},
+                {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
+                {'params': main_model.nlp_model.parameters(), 'lr': args.learning_rate / 4},
             ],
             lr=args.learning_rate,
             eps=args.adam_epsilon,
@@ -364,17 +361,27 @@ def main():
         )
         loss_fn: nn.Module = nn.BCELoss()
 
+        # if model is loaded from checkpoint, load optimizer and scheduler
+        if args.main_model_name_or_path is not None:
+            load_opt_sched_from_ckpt(args.main_model_name_or_path, optimizer, scheduler, device)
+
         # train
-        for epoch in range(args.num_train_epochs):
+        epoch_num_max_len: int = len(str(args.num_train_epochs))
+        for epoch in range(scheduler.last_epoch, args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
             train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
             # TODO: save optimizer and scheduler
             if (epoch + 1) % args.save_steps == 0:
-                save_ckpt(ckpt_output_dir.joinpath(f'epoch_{epoch + 1}'), main_model)
+                save_ckpt(
+                    ckpt_output_dir.joinpath(f'epoch_{epoch + 1:0{epoch_num_max_len}d}'),
+                    main_model,
+                    optimizer,
+                    scheduler
+                )
 
         # save_final_model
         # we don't save optimizer and scheduler since training is done
-        save_ckpt(ckpt_output_dir.joinpath(f'epoch_{args.num_train_epochs}'), main_model)
+        save_ckpt(ckpt_output_dir.joinpath(f'epoch_{args.num_train_epochs}_final'), main_model)
         
     elif args.do_eval:
         ...
@@ -389,7 +396,7 @@ def main():
             pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
 
             # output as json file
-            with open(test_results_dir.joinpath('results.json'), 'w') as f:
+            with open(test_results_dir.joinpath('test_results.json'), 'w') as f:
                 json.dump({
                     'pred_prob': pred_prob,
                     'pred_labels': pred_labels,
