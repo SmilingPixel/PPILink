@@ -1,25 +1,124 @@
-from typing import Any, List
+import pathlib
+from pathlib import Path
+from typing import Any, List, Optional, Union
 
 import torch.nn as nn
 import torch
-from transformers import BertModel
+from transformers import BertModel, RobertaModel
+
+from .model_config import PILinkModelConfig
 
 
 class PILinkModel(nn.Module):
-    def __init__(self, code_model: Any, nlp_model: BertModel):
+    """
+    PyTorch module for the PI Link Model.
+
+    Attributes:
+        nlp_model (BertModel): The underlying BERT model for natural language processing.
+        linears (nn.Sequential): Sequential module for linear layers.
+        sigmoid (nn.Sigmoid): Sigmoid activation function.
+
+    Methods:
+        from_trained_model: Load a trained model from a specified directory.
+        forward: Forward pass for the model.
+
+    """
+
+    def __init__(
+        self,
+        config: PILinkModelConfig = PILinkModelConfig(),
+        nlp_model: Optional[BertModel] = None,
+        code_model: Optional[RobertaModel] = None
+    ):
         super(PILinkModel, self).__init__()
-        self.nlp_model: BertModel = nlp_model
+        self.confi: PILinkModelConfig = config
+
+        self.nlp_model: BertModel = BertModel(config.nlp_model_config) if nlp_model is None else nlp_model
         # TODO: add code model
 
-        total_hidden_size: int = nlp_model.config.hidden_size # + code_model.config.hidden_size
-        linear_sizes: List[int] = [total_hidden_size, 512, 1]
-        self.linears = nn.Sequential(
-            nn.Linear(linear_sizes[0], linear_sizes[1]),
+        linear_block = lambda in_features, out_features: nn.Sequential(
+            nn.Linear(in_features, out_features),
             nn.ReLU(),
-            nn.Linear(linear_sizes[1], linear_sizes[2]),
-            nn.Sigmoid()
         )
-      
+        linear_blocks = [linear_block(in_features, out_features) for in_features, out_features in zip(config.linear_sizes, config.linear_sizes[1:])]
+        linears_but_last = nn.Sequential(*linear_blocks)
+
+        self.linears = nn.Sequential(linears_but_last, nn.Linear(config.linear_sizes[-1], 1))
+        self.sigmoid = nn.Sigmoid()
+
+    @classmethod
+    def from_trained_model(
+        cls,
+        model_name_or_path: Union[str, Path],
+        device: Union[str, torch.device] = "cpu"
+    ) -> 'PILinkModel':
+        """
+        Load a trained model from the specified directory.
+
+        Args:
+            model_name_or_path (Union[str, Path]): The path to the directory containing the model.
+            device (Union[str, torch.device], optional): The device to load the model on. Defaults to "cpu".
+
+        Returns:
+            PILinkModel: The loaded trained model.
+
+        Raises:
+            ValueError: If the model directory or config file does not exist, or if the model file does not exist.
+        """
+        model_name_or_path = Path(model_name_or_path)
+        model_dir_exist = Path.is_dir(model_name_or_path)
+        if not model_dir_exist:
+            raise ValueError(f"Model directory {model_name_or_path} does not exist.")
+
+        # read config from json
+        config_path = Path.joinpath(model_name_or_path, "config.json")
+        config_exist = Path.is_file(config_path)
+        if not config_exist:
+            raise ValueError(f"Config file {config_path} does not exist.")
+        config: PILinkModelConfig = PILinkModelConfig.from_json_file(config_path)
+
+        # load model from config
+        model = cls(config)
+
+        # load model file
+        model_path = Path.joinpath(model_name_or_path, "model.pt")
+        model_exist = Path.is_file(model_path)
+        if not model_exist:
+            raise ValueError(f"Model file {model_path} does not exist.")
+        model.load_state_dict(torch.load(model_path, map_location=device))
+
+        return model
+    
+    @classmethod
+    def from_scratch(
+        cls,
+        nlp_model_name_or_path: Union[str, Path],
+        code_model_name_or_path: Union[str, Path],
+        device: Union[str, torch.device] = "cpu"
+    ) -> 'PILinkModel':
+        """
+        Create a new model from scratch. Initializes the nlp and code model from pretrained.
+
+        Args:
+            nlp_model_name_or_path (Union[str, Path]): The name or path of the NLP model to load.
+            code_model_name_or_path (Union[str, Path]): The name or path of the code model to load.
+            device (Union[str, torch.device], optional): The device to load the model on. Defaults to "cpu".
+        
+        Returns:
+            PILinkModel: The new model.
+        """
+        
+        nlp_model: BertModel = BertModel.from_pretrained(nlp_model_name_or_path)
+        # code_model = TODO
+        config: PILinkModelConfig = PILinkModelConfig(
+            nlp_model_config=nlp_model.config,
+            # code_model_config= code_model.config
+        )
+
+        model = cls(config, nlp_model=nlp_model)
+        model = model.to(device)
+        return model
+
     def forward(self, nl_inputs):
         """
         Forward pass for the model.
@@ -38,5 +137,6 @@ class PILinkModel(nn.Module):
         vec = nl_vec
         # vec = torch.cat((nl_vec, code_vec), dim=1)
         out = self.linears(vec)
+        out = self.sigmoid(out)
         return out
     

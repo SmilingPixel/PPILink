@@ -5,6 +5,7 @@ import os
 import pathlib
 import random
 import time
+from pathlib import Path
 from typing import Any, List, Optional, Union, Tuple
 
 import numpy as np
@@ -22,7 +23,7 @@ from dataset.pi_link_dataset import PILinkDataset
 running_id: str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 # configure logging
-os.makedirs('logs', exist_ok=True)
+Path('logs').mkdir(exist_ok=True)
 logging_format: logging.Formatter = logging.Formatter(
     fmt='%(asctime)s - %(levelname)s - %(name)s -  %(message)s',
     datefmt='%m/%d/%Y %H:%M:%S'
@@ -119,7 +120,7 @@ def test(
 
 
 def save_ckpt(
-    ckpt_output_dir: Union[str, pathlib.Path],
+    ckpt_output_dir: Union[str, Path],
     model: nn.Module,
     optimizer: Optional[torch.optim.Optimizer] = None,
     scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
@@ -127,29 +128,32 @@ def save_ckpt(
     """
     Save checkpoint.
     """
-    os.makedirs(ckpt_output_dir, exist_ok=True)
-    torch.save(model.state_dict(), os.path.join(ckpt_output_dir, 'model.pt'))
+    ckpt_output_dir: Path = Path(ckpt_output_dir)
+    ckpt_output_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), ckpt_output_dir.joinpath('model.pt'))
+    model.config.to_json_file(ckpt_output_dir.joinpath('config.json'))
     if optimizer is not None:
-        torch.save(optimizer.state_dict(), os.path.join(ckpt_output_dir, 'optimizer.pt'))
+        torch.save(optimizer.state_dict(), ckpt_output_dir.joinpath('optimizer.pt'))
     if scheduler is not None:
-        torch.save(scheduler.state_dict(), os.path.join(ckpt_output_dir, 'scheduler.pt'))
+        torch.save(scheduler.state_dict(), ckpt_output_dir.joinpath('scheduler.pt'))
 
 
 def load_ckpt(
-    ckpt_output_dir: Union[str, pathlib.Path],
-    model: nn.Module,
+    ckpt_output_dir: Union[str, Path],
     optimizer: Optional[torch.optim.Optimizer] = None,
     scheduler: Optional[torch.optim.lr_scheduler.LRScheduler] = None,
     device: Union[torch.device, str] = 'cpu'
-) -> None:
+) -> PILinkModel:
     """
     Load checkpoint.
     """
-    model.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'model.pt'), map_location=device))
+    ckpt_output_dir: Path = Path(ckpt_output_dir)
+    model: PILinkModel = PILinkModel.from_trained_model(ckpt_output_dir, device=device)
     if optimizer is not None:
-        optimizer.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'optimizer.pt'), map_location=device))
+        optimizer.load_state_dict(torch.load(ckpt_output_dir.joinpath('optimizer.pt'), map_location=device))
     if scheduler is not None:
-        scheduler.load_state_dict(torch.load(os.path.join(ckpt_output_dir, 'scheduler.pt'), map_location=device))
+        scheduler.load_state_dict(torch.load(ckpt_output_dir.joinpath('scheduler.pt'), map_location=device))
+    return model
         
 
 def set_seed(seed: int) -> None:
@@ -273,8 +277,8 @@ def main():
     logger.info(args)
 
     # set up output dir
-    output_dir: str = args.output_dir
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir: Path = Path(args.output_dir)
+    output_dir.mkdir(exist_ok=True)
 
     # set up device
     if args.device == 'cpu':
@@ -295,15 +299,18 @@ def main():
 
     # initialize model
     # TODO: pr code model
-    # code_model: RobertaModel = RobertaModel.from_pretrained(args.code_model_name_or_path).to(device)
-    code_model: Any = None
-    nlp_model: BertModel = BertModel.from_pretrained(args.nlp_model_name_or_path).to(device)
-    main_model: nn.Module = PILinkModel(
-        code_model,
-        nlp_model,
-    ).to(device)
     if args.main_model_name_or_path is not None: # load model from checkpoint
-        load_ckpt(args.main_model_name_or_path, main_model, device=device)
+        main_model = load_ckpt(
+            args.main_model_name_or_path,
+            main_model,
+            device=device
+        )
+    else: # initialize from scratch, and load nlp model and code model from pretrained model file
+        main_model = PILinkModel.from_scratch(
+            args.nlp_model_name_or_path,
+            args.code_model_name_or_path,
+            device=device
+        )
 
     if not args.do_train and not args.do_eval and not args.do_test:
         raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
@@ -311,7 +318,7 @@ def main():
         raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
     
     # initialize dataset
-    file_path: Union[str, pathlib.Path] = (
+    file_path: Union[str, Path] = (
         args.train_file if args.do_train
         else args.eval_file if args.do_eval
         else args.test_file
@@ -330,20 +337,20 @@ def main():
     
     if args.do_train:
         # freeze all parameters but those of linears
-        for param in main_model.parameters():
-            param.requires_grad = False
-        for param in main_model.linears.parameters():
-            param.requires_grad = True
+        # for param in main_model.parameters():
+        #     param.requires_grad = False
+        # for param in main_model.linears.parameters():
+        #     param.requires_grad = True
 
         # check if {output_dir}/ckpt/{running_id} exists
-        os.makedirs(os.path.join(output_dir, 'ckpt'), exist_ok=True)
-        ckpt_output_dir: str = os.path.join(output_dir, 'ckpt', str(running_id))
-        os.makedirs(ckpt_output_dir, exist_ok=True)
+        ckpt_output_dir: Path = output_dir.joinpath('ckpt', str(running_id))
+        ckpt_output_dir.mkdir(parents=True, exist_ok=True)
         
         # set up optimizer, scheduler and loss function
         optimizer: torch.optim.Optimizer = torch.optim.AdamW(
             [
-                {'params': main_model.linears.parameters()},
+                # {'params': main_model.linears.parameters()},
+                {'params': main_model.parameters(), 'lr': args.learning_rate},
             ],
             lr=args.learning_rate,
             eps=args.adam_epsilon,
@@ -363,11 +370,11 @@ def main():
             train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
             # TODO: save optimizer and scheduler
             if (epoch + 1) % args.save_steps == 0:
-                save_ckpt(os.path.join(ckpt_output_dir, f'epoch_{epoch + 1}'), main_model)
+                save_ckpt(ckpt_output_dir.joinpath(f'epoch_{epoch + 1}'), main_model)
 
         # save_final_model
         # we don't save optimizer and scheduler since training is done
-        save_ckpt(os.path.join(ckpt_output_dir, f'epoch_{args.num_train_epochs}'), main_model)
+        save_ckpt(ckpt_output_dir.joinpath(f'epoch_{args.num_train_epochs}'), main_model)
         
     elif args.do_eval:
         ...
@@ -382,4 +389,5 @@ def main():
 
 
 if __name__ == "__main__":
+    # TODO: check and refactor all doc
     main()
