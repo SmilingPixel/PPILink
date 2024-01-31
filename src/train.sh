@@ -7,6 +7,6 @@ python3 run.py \
     --train_file ../data/small_dataset/android_closed_issues_2011-01-01_2021-01-01_cluster_range_0-6999_preprocessed.json \
     --num_train_epochs 24 \
     --warmup_steps 4 \
-    --save_steps 8 \
+    --save_steps 6 \
     --device cuda
     

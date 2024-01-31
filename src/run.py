@@ -247,7 +247,7 @@ def main():
         help="Linear warmup over warmup_steps."
     )
     parser.add_argument(
-        "--num_train_epochs", default=32, type=int,
+        "--num_train_epochs", default=24, type=int,
         help="Total number of training epochs."
     )
 
@@ -258,7 +258,7 @@ def main():
     )
 
     parser.add_argument(
-        '--save_steps', type=int, default=10,
+        '--save_steps', type=int, default=6,
         help='steps (epochs) to save model'
     )
 
