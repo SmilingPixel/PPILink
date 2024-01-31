@@ -16,6 +16,7 @@ from transformers import BertModel, BertTokenizer, RobertaModel, get_linear_sche
 
 from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
+from report import log_summary, test_report
 
 
 # use time as a unique running id
@@ -30,7 +31,8 @@ logging_format: logging.Formatter = logging.Formatter(
 )
 logger: logging.Logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-file_handler: logging.FileHandler = logging.FileHandler(f'logs/{running_id}.log')
+log_file_path_str: str = f'logs/{running_id}.log'
+file_handler: logging.FileHandler = logging.FileHandler(log_file_path_str)
 file_handler.setFormatter(logging_format)
 consola_handler: logging.StreamHandler = logging.StreamHandler()
 consola_handler.setFormatter(logging_format)
@@ -106,8 +108,8 @@ def test(
 
             # forward
             pred = model(inputs)
-            all_pred.append(pred.item())
-            true_labels.append(label.item())
+            all_pred.extend(pred.squeeze(1).tolist())
+            true_labels.extend(label.squeeze(1).tolist())
 
             # output log
             if (batch_idx + 1) % 10 == 0:
@@ -175,12 +177,12 @@ def main():
         "--output_dir", type=str, default='output', required=True,
         help="The output directory where the model checkpoints and test results will be saved."
     )
-    parser.add_argument("--nlp_model_name_or_path", default=None, type=str, required=True,
+    parser.add_argument("--nlp_model_name_or_path", default=None, required=True, type=str,
         help="The model used to process nl into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
-    )
-    parser.add_argument("--code_model_name_or_path", default=None, type=str, required=True,
+    ) # required=True because it's used to provide tokenizer fo nl
+    parser.add_argument("--code_model_name_or_path", default=None, required=True, type=str,
         help="The model used to process code into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
-    )
+    ) # required=True because it's used to provide tokenizer for code
 
     # optional: load model from checkpoint
     parser.add_argument("--main_model_name_or_path", default=None, type=str,
@@ -295,6 +297,9 @@ def main():
     # set up random seed
     set_seed(args.seed)
 
+    # check params and load model
+    if args.main_model_name_or_path is None and (args.nlp_model_name_or_path is None or args.code_model_name_or_path is None):
+        raise ValueError('If main_model_name_or_path is not provided, both nlp_model_name_or_path and code_model_name_or_path must be provided.')
     # initialize model
     # TODO: pr code model
     if args.main_model_name_or_path is not None: # load model from checkpoint
@@ -382,12 +387,18 @@ def main():
         # save_final_model
         # we don't save optimizer and scheduler since training is done
         save_ckpt(ckpt_output_dir.joinpath(f'epoch_{args.num_train_epochs}_final'), main_model)
+
+        # summary log
+        log_summary.generate_log_summary(
+            Path(log_file_path_str),
+            output_dir.joinpath('train_summary.png')
+        )
         
     elif args.do_eval:
         ...
     elif args.do_test:
         # output results to {output_dir}/test_results/{running_id}
-        test_results_dir: Path = output_dir.joinpath('test_results', str(running_id))
+        test_results_dir: Path = output_dir.joinpath('tests', str(running_id))
         test_results_dir.mkdir(parents=True, exist_ok=True)
         with torch.no_grad():
             preds, true_labels = test(dataloader, main_model, device)
@@ -396,16 +407,19 @@ def main():
             pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
 
             # output as json file
-            with open(test_results_dir.joinpath('test_results.json'), 'w') as f:
+            test_results_file_path: Path = test_results_dir.joinpath('test_results.json')
+            with open(test_results_file_path, 'w') as f:
                 json.dump({
                     'pred_prob': pred_prob,
                     'pred_labels': pred_labels,
                     'true_labels': true_labels
                 }, f)
 
-            
-        
-
+            # generate test report
+            test_report.generate_test_report(
+                test_results_file_path,
+                test_results_dir.joinpath('test_report.json')
+            )
 
 
 if __name__ == "__main__":

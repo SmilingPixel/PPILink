@@ -40,7 +40,11 @@ class PILinkModel(nn.Module):
             nn.Linear(in_features, out_features),
             nn.ReLU(),
         )
-        linear_blocks = [linear_block(in_features, out_features) for in_features, out_features in zip(config.linear_sizes, config.linear_sizes[1:])]
+        linear_blocks = [
+            linear_block(in_features, out_features)
+            for in_features, out_features
+            in zip([config.nlp_model_config.hidden_size] + config.linear_sizes, config.linear_sizes)
+        ]
         linears_but_last = nn.Sequential(*linear_blocks)
 
         self.linears = nn.Sequential(linears_but_last, nn.Linear(config.linear_sizes[-1], 1))
@@ -78,7 +82,7 @@ class PILinkModel(nn.Module):
         config: PILinkModelConfig = PILinkModelConfig.from_json_file(config_path)
 
         # load model from config
-        model = cls(config)
+        model = cls(config).to(device)
 
         # load model file
         model_path = Path.joinpath(model_name_or_path, "model.pt")
@@ -115,8 +119,7 @@ class PILinkModel(nn.Module):
             # code_model_config= code_model.config
         )
 
-        model = cls(config, nlp_model=nlp_model)
-        model = model.to(device)
+        model = cls(config, nlp_model=nlp_model).to(device)
         return model
 
     def forward(self, nl_inputs):

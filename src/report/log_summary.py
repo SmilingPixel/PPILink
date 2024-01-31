@@ -6,15 +6,22 @@ import matplotlib.pyplot as plt
 
 
 def generate_log_summary(input_file: Path, output_file: Path):
-    with open(input_file, 'r') as f:
-        log = f.readlines()
+    #Extract epoch and total loss
+    epoch_pattern = r"Epoch (\d+)"
+    loss_pattern = r"total loss: (\d+\.\d+)"
+    epochs, losses = [], []
+    for line in input_file.open('r'):
+        if 'Epoch' in line:
+            epoch = re.search(epoch_pattern, line).group(1)
+            epochs.append(int(epoch))
+        if 'total loss' in line:
+            loss = re.search(loss_pattern, line).group(1)
+            losses.append(float(loss))
 
-    # Extract epoch and total loss
-    pattern = r"Epoch (\d+).*total loss: (\d+\.\d+)"
-    matches = re.findall(pattern, log)
-
-    epochs = [int(epoch) for epoch, _ in matches]
-    losses = [float(loss) for _, loss in matches]
+    # truncate to the same length
+    length = min(len(epochs), len(losses))
+    epochs = epochs[:length]
+    losses = losses[:length]
 
     plt.figure(figsize=(10, 6))
     plt.plot(epochs, losses, marker='o')
@@ -28,8 +35,8 @@ def generate_log_summary(input_file: Path, output_file: Path):
 def main():
     parser = argparse.ArgumentParser(description='Report generator')
 
-    parser.add_argument('input', type=str, required=True, help='Input file')
-    parser.add_argument('output', type=str, required=True, help='Output file')
+    parser.add_argument('--input', type=str, required=True, help='Input file')
+    parser.add_argument('--output', type=str, required=True, help='Output file')
 
     args = parser.parse_args()
 

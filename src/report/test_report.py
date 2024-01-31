@@ -24,14 +24,14 @@ def generate_test_report(input_file: Path, output_file: Path):
     report: Dict = classification_report(y_true, y_pred, output_dict=True)
 
     with open(output_file, 'w') as f:
-        json.dump(report, f)
+        json.dump(report, f, indent=2)
 
 
 def main():
     parser = argparse.ArgumentParser(description='Report generator')
 
-    parser.add_argument('input', type=str, required=True, help='Input file')
-    parser.add_argument('output', type=str, required=True, help='Output file')
+    parser.add_argument('--input', type=str, required=True, help='Input file')
+    parser.add_argument('--output', type=str, required=True, help='Output file')
 
     args = parser.parse_args()
 
