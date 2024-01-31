@@ -391,7 +391,7 @@ def main():
         # summary log
         log_summary.generate_log_summary(
             Path(log_file_path_str),
-            output_dir.joinpath('train_summary.png')
+            ckpt_output_dir.joinpath('train_summary.png')
         )
         
     elif args.do_eval:
