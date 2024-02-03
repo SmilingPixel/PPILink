@@ -1,7 +1,7 @@
 python3 run.py \
     --do_test \
     --main_model_name_or_path ../output/ckpt/20240130064905/epoch_16 \
-    --nlnl_model_name_or_path ../models/bert-small/ \
+    --nlnl_model_name_or_path ../models/roberta-base/ \
     --nlpl_model_name_or_path ../models/code-bert-base/ \
     --eval_batch_size 64 \
     --output_dir ../output \

@@ -14,7 +14,7 @@ class PILinkModel(nn.Module):
     PyTorch module for the PI Link Model.
 
     Attributes:
-        nlnl_model (BertModel): The underlying BERT model for natural language processing (NL-NL pair).
+        nlnl_model (RobertaModel): The underlying BERT model for natural language processing (NL-NL pair).
         linears (nn.Sequential): Sequential module for linear layers.
         sigmoid (nn.Sigmoid): Sigmoid activation function.
 
@@ -27,13 +27,13 @@ class PILinkModel(nn.Module):
     def __init__(
         self,
         config: PILinkModelConfig = PILinkModelConfig(),
-        nlnl_model: Optional[BertModel] = None,
+        nlnl_model: Optional[RobertaModel] = None,
         nlpl_model: Optional[RobertaModel] = None
     ):
         super(PILinkModel, self).__init__()
         self.config: PILinkModelConfig = config
 
-        self.nlnl_model: BertModel = BertModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
+        self.nlnl_model: RobertaModel = RobertaModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
         # TODO: add nlpl model
 
         linear_block = lambda in_features, out_features: nn.Sequential(
@@ -112,7 +112,7 @@ class PILinkModel(nn.Module):
             PILinkModel: The new model.
         """
         
-        nlnl_model: BertModel = BertModel.from_pretrained(nlnl_model_name_or_path)
+        nlnl_model: RobertaModel = RobertaModel.from_pretrained(nlnl_model_name_or_path)
         # nlpl_model = TODO
         config: PILinkModelConfig = PILinkModelConfig(
             nlnl_model_config=nlnl_model.config,

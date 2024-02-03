@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
-from transformers import BertModel, BertTokenizer, RobertaModel, get_linear_schedule_with_warmup
+from transformers import BertModel, BertTokenizer, RobertaModel, RobertaTokenizer, get_linear_schedule_with_warmup
 
 from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
@@ -325,10 +325,11 @@ def main():
         else args.eval_file if args.do_eval
         else args.test_file
     )
-    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlnl_model_name_or_path)
+    # bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlnl_model_name_or_path)
+    nlnl_tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained(args.nlnl_model_name_or_path)
     dataset: Dataset = PILinkDataset(
         file_path,
-        bert_tokenizer,
+        nlnl_tokenizer,
         max_input_length=args.max_seq_length
     ) # TODO: train, eval and test
     dataloader: DataLoader = DataLoader(

@@ -11,14 +11,14 @@ class PILinkModelConfig(PretrainedConfig):
 
     Args:
         nlpl_model_config (RobertaConfig): The configuration for the NL-PL model. TODO: Add more details.
-        nlnl_model_config (BertConfig): The configuration for the NL-NL model.
+        nlnl_model_config (RobertaConfig): The configuration for the NL-NL model.
         num_linear_layers (int, optional): The number of linear layers. Defaults to 2.
         linear_sizes (list, optional): The sizes of the linear layers. Defaults to [256]. We skip the last size, which is 1.
         **kwargs: Additional keyword arguments.
 
     Attributes:
         nlpl_model_config (RobertaConfig): The configuration for the NL-PL model. TODO: Add more details.
-        nlnl_model_config (BertConfig): The configuration for the NL-NL model.
+        nlnl_model_config (RobertaConfig): The configuration for the NL-NL model.
         num_linear_layers (int): The number of linear layers.
         linear_sizes (list): The sizes of the linear layers.
 
@@ -36,9 +36,8 @@ class PILinkModelConfig(PretrainedConfig):
 
     def __init__(self,
         nlpl_model_config: RobertaConfig = RobertaConfig(), # TODO
-        nlnl_model_config: BertConfig = BertConfig(),
-        num_linear_layers: int = 2,
-        linear_sizes: list = [256], # last size is 1
+        nlnl_model_config: RobertaConfig = RobertaConfig(),
+        linear_sizes: list = [512, 256], # last size is 1, first size is sum of NL-NL and NL-PL model hidden sizes
         **kwargs
     ):
         """
@@ -46,8 +45,7 @@ class PILinkModelConfig(PretrainedConfig):
 
         Args:
             nlpl_model_config (RobertaConfig): The configuration for the NL-PL model. TODO: Add more details.
-            nlnl_model_config (BertConfig): The configuration for the NL-NL model.
-            num_linear_layers (int, optional): The number of linear layers. Defaults to 2.
+            nlnl_model_config (RobertaConfig): The configuration for the NL-NL model.
             linear_sizes (list, optional): The sizes of the linear layers. Defaults to [256].
                 We ignore the first size, which is sum of the NL-NL and NL-PL model hidden sizes.
                 We ignore the last size, which is 1.
@@ -57,9 +55,6 @@ class PILinkModelConfig(PretrainedConfig):
         super(PILinkModelConfig, self).__init__(**kwargs)
         self.nlpl_model_config = nlpl_model_config
         self.nlnl_model_config = nlnl_model_config
-        assert num_linear_layers > 0, "Number of linear layers must be greater than 0."
-        assert num_linear_layers == len(linear_sizes) + 1, "Number of linear layers must match the number of sizes."
-        self.num_linear_layers = num_linear_layers
         self.linear_sizes = linear_sizes
 
     def to_dict(self) -> Dict[str, Any]:
@@ -108,7 +103,7 @@ class PILinkModelConfig(PretrainedConfig):
             PILinkModelConfig: Configuration object.
         """
         config_dict["nlpl_model_config"] = RobertaConfig.from_dict(config_dict["nlpl_model_config"])
-        config_dict["nlnl_model_config"] = BertConfig.from_dict(config_dict["nlnl_model_config"])
+        config_dict["nlnl_model_config"] = RobertaConfig.from_dict(config_dict["nlnl_model_config"])
         return cls(**config_dict)
     
     @classmethod

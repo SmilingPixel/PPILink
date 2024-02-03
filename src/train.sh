@@ -1,6 +1,6 @@
 python3 run.py \
     --do_train \
-    --nlnl_model_name_or_path ../models/bert-small/ \
+    --nlnl_model_name_or_path ../models/roberta-base/ \
     --nlpl_model_name_or_path ../models/code-bert-base/ \
     --train_batch_size 64 \
     --output_dir ../output \
