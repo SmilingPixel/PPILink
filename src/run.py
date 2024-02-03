@@ -177,12 +177,12 @@ def main():
         "--output_dir", type=str, default='output', required=True,
         help="The output directory where the model checkpoints and test results will be saved."
     )
-    parser.add_argument("--nlp_model_name_or_path", default=None, required=True, type=str,
-        help="The model used to process nl into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
-    ) # required=True because it's used to provide tokenizer fo nl
-    parser.add_argument("--code_model_name_or_path", default=None, required=True, type=str,
-        help="The model used to process code into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
-    ) # required=True because it's used to provide tokenizer for code
+    parser.add_argument("--nlnl_model_name_or_path", default=None, required=True, type=str,
+        help="The model used to process NL-NL pairs into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
+    ) # required=True because it's used to provide tokenizer fo NL-NL
+    parser.add_argument("--nlpl_model_name_or_path", default=None, required=True, type=str,
+        help="The model used to process NL-PL pairs into vector embeddings. It's used to initilize model if ckpt of main model is not provided."
+    ) # required=True because it's used to provide tokenizer for NL-PL
 
     # optional: load model from checkpoint
     parser.add_argument("--main_model_name_or_path", default=None, type=str,
@@ -223,7 +223,7 @@ def main():
         help="Batch size for evaluation."
     )
     parser.add_argument(
-        "--learning_rate", default=0.002, type=float,
+        "--learning_rate", default=0.0012, type=float,
         help="The initial learning rate."
     )
     parser.add_argument(
@@ -298,8 +298,8 @@ def main():
     set_seed(args.seed)
 
     # check params and load model
-    if args.main_model_name_or_path is None and (args.nlp_model_name_or_path is None or args.code_model_name_or_path is None):
-        raise ValueError('If main_model_name_or_path is not provided, both nlp_model_name_or_path and code_model_name_or_path must be provided.')
+    if args.main_model_name_or_path is None and (args.nlnl_model_name_or_path is None or args.nlpl_model_name_or_path is None):
+        raise ValueError('If main_model_name_or_path is not provided, both nlnl_model_name_or_path and nlpl_model_name_or_path must be provided.')
     # initialize model
     # TODO: pr code model
     if args.main_model_name_or_path is not None: # load model from checkpoint
@@ -307,10 +307,10 @@ def main():
             Path(args.main_model_name_or_path),
             device=device
         )
-    else: # initialize from scratch, and load nlp model and code model from pretrained model file
+    else: # initialize from scratch, and load NL-NL model and NL-PL model from pretrained model file
         main_model: PILinkModel = PILinkModel.from_scratch(
-            args.nlp_model_name_or_path,
-            args.code_model_name_or_path,
+            args.nlnl_model_name_or_path,
+            args.nlpl_model_name_or_path,
             device=device
         )
 
@@ -325,7 +325,7 @@ def main():
         else args.eval_file if args.do_eval
         else args.test_file
     )
-    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlp_model_name_or_path)
+    bert_tokenizer: BertTokenizer = BertTokenizer.from_pretrained(args.nlnl_model_name_or_path)
     dataset: Dataset = PILinkDataset(
         file_path,
         bert_tokenizer,
@@ -352,7 +352,7 @@ def main():
         optimizer: torch.optim.Optimizer = torch.optim.AdamW(
             [
                 {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
-                {'params': main_model.nlp_model.parameters(), 'lr': args.learning_rate / 4},
+                {'params': main_model.nlnl_model.parameters(), 'lr': args.learning_rate / 4},
             ],
             lr=args.learning_rate,
             eps=args.adam_epsilon,
