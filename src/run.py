@@ -43,7 +43,7 @@ logger.addHandler(consola_handler)
 def train(
     dataloader: DataLoader,
     model: nn.Module,
-    device: torch.device | str,
+    device: Union[torch.device, str],
     loss_fn: nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
@@ -79,7 +79,43 @@ def train(
     
     scheduler.step()
     end_time: float = time.time()
-    logger.info(f'This epoch training time: {end_time - start_time}s, total loss: {total_loss:.4f}')
+    average_loss: float = total_loss / len(dataloader)
+    logger.info(f'This epoch training time: {end_time - start_time}s, average loss: {average_loss:.4f}')
+
+
+def eval(
+    dataloader: DataLoader,
+    model: nn.Module,
+    device: Union[torch.device, str],
+    loss_fn: nn.Module,
+) -> None:
+    """
+    Evaluate the model.
+    """
+    start_time: float = time.time()
+    model.eval()
+    total_size = len(dataloader.dataset)
+    batch_size = dataloader.batch_size
+    total_loss: float = 0.0
+    with torch.no_grad():
+        for batch_idx, (inputs, label) in enumerate(dataloader):
+            for key in inputs:
+                inputs[key] = inputs[key].to(device)
+            label = label.to(device)
+
+            # forward
+            pred = model(inputs)
+            loss = loss_fn(pred, label)
+            total_loss += loss.item()
+
+            # output log
+            if (batch_idx + 1) % 10 == 0:
+                loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
+                logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+    
+    end_time: float = time.time()
+    average_loss: float = total_loss / len(dataloader)
+    logger.info(f'This epoch eval time: {end_time - start_time}s, average loss: {average_loss:.4f}')
 
 
 def test(
@@ -314,10 +350,12 @@ def main():
             device=device
         )
 
-    if not args.do_train and not args.do_eval and not args.do_test:
-        raise ValueError('At least one of `do_train`, `do_eval` or `do_test` must be True.')
-    if int(args.do_train) + int(args.do_eval) + int(args.do_test) > 1:
-        raise ValueError('Only one of `do_train`, `do_eval` or `do_test` can be True.')
+    if not args.do_train and not args.do_test:
+        raise ValueError('At least one of `do_train`, or `do_test` must be True.')
+    if int(args.do_train) + int(args.do_test) > 1:
+        raise ValueError('Only one of `do_train`, or `do_test` can be True.')
+    if args.do_eval and not args.do_train:
+        raise ValueError('`do_eval` can only be True when `do_train` is True.')
     
     # initialize dataset
     file_path: Union[str, Path] = (
@@ -325,18 +363,30 @@ def main():
         else args.eval_file if args.do_eval
         else args.test_file
     )
-    nlnl_tokenizer: Union[BertTokenizer, RobertaTokenizer] = BertTokenizer.from_pretrained(args.nlnl_model_name_or_path)
+    nlnl_tokenizer: Union[BertTokenizer, RobertaTokenizer] = RobertaTokenizer.from_pretrained(args.nlnl_model_name_or_path)
     dataset: Dataset = PILinkDataset(
         file_path,
         nlnl_tokenizer,
         max_input_length=args.max_seq_length
-    ) # TODO: train, eval and test
+    )
     dataloader: DataLoader = DataLoader(
         dataset,
         batch_size=args.train_batch_size,
         shuffle=True,
     )
-    
+
+    if args.do_eval:
+        eval_dataset: Dataset = PILinkDataset(
+            args.eval_file,
+            nlnl_tokenizer,
+            max_input_length=args.max_seq_length
+        )
+        eval_dataloader: DataLoader = DataLoader(
+            eval_dataset,
+            batch_size=args.eval_batch_size,
+            shuffle=False,
+        )
+
     if args.do_train:
         # freeze all parameters but those of linears
         # for param in main_model.parameters():
@@ -372,7 +422,10 @@ def main():
         for epoch in range(scheduler.last_epoch, args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
             train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
-            # TODO: save optimizer and scheduler
+
+            if args.do_eval:
+                eval(eval_dataloader, main_model, device, loss_fn)
+
             if (epoch + 1) % args.save_steps == 0:
                 save_ckpt(
                     ckpt_output_dir.joinpath(f'epoch_{epoch + 1:0{epoch_num_max_len}d}'),
@@ -386,13 +439,11 @@ def main():
         save_ckpt(ckpt_output_dir.joinpath(f'epoch_{args.num_train_epochs}_final'), main_model)
 
         # summary log
-        log_summary.generate_log_summary(
+        log_summary.generate_log_summary_from_file(
             Path(log_file_path_str),
             ckpt_output_dir.joinpath('train_summary.png')
         )
         
-    elif args.do_eval:
-        ...
     elif args.do_test:
         # output results to {output_dir}/test_results/{running_id}
         test_results_dir: Path = output_dir.joinpath('tests', str(running_id))
