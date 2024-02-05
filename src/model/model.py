@@ -48,7 +48,7 @@ class PILinkModel(nn.Module):
         ]
         linears_but_last = nn.Sequential(*linear_blocks)
 
-        self.linears = nn.Sequential(linears_but_last, nn.Linear(config.linear_sizes[-1], 1))
+        self.linears = nn.Sequential(linears_but_last, nn.Linear(([config.nlnl_model_config.hidden_size] + config.linear_sizes)[-1], 1))
         self.sigmoid = nn.Sigmoid()
 
     @classmethod
