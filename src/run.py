@@ -223,8 +223,8 @@ def main():
         help="Batch size for evaluation."
     )
     parser.add_argument(
-        "--learning_rate", default=0.0012, type=float,
-        help="The initial learning rate."
+        "--learning_rate", default=3e-5, type=float,
+        help="The peak learning rate."
     )
     parser.add_argument(
         "--adam_epsilon", default=1e-8, type=float,
@@ -350,10 +350,7 @@ def main():
         
         # set up optimizer, scheduler and loss function
         optimizer: torch.optim.Optimizer = torch.optim.AdamW(
-            [
-                {'params': main_model.linears.parameters(), 'lr': args.learning_rate},
-                {'params': main_model.nlnl_model.parameters(), 'lr': args.learning_rate / 4},
-            ],
+            params=main_model.parameters(),
             lr=args.learning_rate,
             eps=args.adam_epsilon,
             weight_decay=args.adam_weight_decay,
