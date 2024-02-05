@@ -10,13 +10,13 @@ class PILinkModelConfig(PretrainedConfig):
     Configuration class for the PILinkModel.
 
     Args:
-        nlpl_model_config (T5Config): The configuration for the NL-PL model. TODO: Add more details.
+        nlpl_model_config (T5Config): The configuration for the NL-PL model.
         nlnl_model_config (Union[BertConfig, RobertaConfig]): The configuration for the NL-NL model.
         linear_sizes (list, optional): The sizes of the linear layers. Defaults to [256]. We skip the last size, which is 1.
         **kwargs: Additional keyword arguments.
 
     Attributes:
-        nlpl_model_config (T5Config): The configuration for the NL-PL model. TODO: Add more details.
+        nlpl_model_config (T5Config): The configuration for the NL-PL model.
         nlnl_model_config (Union[BertConfig, RobertaConfig]): The configuration for the NL-NL model.
         linear_sizes (list): The sizes of the linear layers.
 
@@ -33,8 +33,8 @@ class PILinkModelConfig(PretrainedConfig):
     """
 
     def __init__(self,
-        nlpl_model_config: T5Config = T5Config(), # TODO
-        nlnl_model_config: Union[BertConfig, RobertaConfig] = BertConfig(),
+        nlpl_model_config: T5Config = T5Config(),
+        nlnl_model_config: Union[BertConfig, RobertaConfig] = RobertaConfig(),
         linear_sizes: list = [512, 256], # last size is 1, first size is sum of NL-NL and NL-PL model hidden sizes
         **kwargs
     ):
@@ -42,7 +42,7 @@ class PILinkModelConfig(PretrainedConfig):
         Initializes the configuration.
 
         Args:
-            nlpl_model_config (T5Config): The configuration for the NL-PL model. TODO: Add more details.
+            nlpl_model_config (T5Config): The configuration for the NL-PL model.
             nlnl_model_config (Union[BertConfig, RobertaConfig]): The configuration for the NL-NL model.
             linear_sizes (list, optional): The sizes of the linear layers. Defaults to [256].
                 We ignore the first size, which is sum of the NL-NL and NL-PL model hidden sizes.
@@ -100,7 +100,7 @@ class PILinkModelConfig(PretrainedConfig):
             PILinkModelConfig: Configuration object.
         """
         config_dict["nlpl_model_config"] = RobertaConfig.from_dict(config_dict["nlpl_model_config"])
-        config_dict["nlnl_model_config"] = BertConfig.from_dict(config_dict["nlnl_model_config"])
+        config_dict["nlnl_model_config"] = RobertaConfig.from_dict(config_dict["nlnl_model_config"])
         return cls(**config_dict)
     
     @classmethod

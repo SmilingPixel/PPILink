@@ -14,8 +14,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from transformers import BertModel, BertTokenizer, RobertaModel, RobertaTokenizer, T5Tokenizer, get_linear_schedule_with_warmup
 
-from model.model import PILinkModel
 from dataset.pi_link_dataset import PILinkDataset
+from model.model import PILinkModel
 from report import log_summary, test_report
 
 
@@ -56,17 +56,19 @@ def train(
     total_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
     total_loss: float = 0.0
-    for batch_idx, (inputs, label) in enumerate(dataloader):
-        for key in inputs:
-            inputs[key] = inputs[key].to(device)
+    for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+        for key in nlnl_inputs:
+            nlnl_inputs[key] = nlnl_inputs[key].to(device)
+        for key in nlpl_inputs:
+            nlpl_inputs[key] = nlpl_inputs[key].to(device)
         label = label.to(device)
 
         optimizer.zero_grad()
 
         # forward
-        pred = model(inputs)
+        pred = model(nlnl_inputs, nlpl_inputs)
         loss = loss_fn(pred, label)
-        total_loss += loss.item()
+        total_loss += loss.item() * label.size(0)
 
         # backward
         loss.backward()
@@ -98,15 +100,17 @@ def eval(
     batch_size = dataloader.batch_size
     total_loss: float = 0.0
     with torch.no_grad():
-        for batch_idx, (inputs, label) in enumerate(dataloader):
-            for key in inputs:
-                inputs[key] = inputs[key].to(device)
+        for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+            for key in nlnl_inputs:
+                nlnl_inputs[key] = nlnl_inputs[key].to(device)
+            for key in nlpl_inputs:
+                nlpl_inputs[key] = nlpl_inputs[key].to(device)
             label = label.to(device)
 
             # forward
-            pred = model(inputs)
+            pred = model(nlnl_inputs, nlpl_inputs)
             loss = loss_fn(pred, label)
-            total_loss += loss.item()
+            total_loss += loss.item() * label.size(0)
 
             # output log
             if (batch_idx + 1) % 10 == 0:
@@ -137,13 +141,15 @@ def test(
     all_pred: list[float] = []
     true_labels: list[float] = []
     with torch.no_grad():
-        for batch_idx, (inputs, label) in enumerate(dataloader):
-            for key in inputs:
-                inputs[key] = inputs[key].to(device)
+        for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+            for key in nlnl_inputs:
+                nlnl_inputs[key] = nlnl_inputs[key].to(device)
+            for key in nlpl_inputs:
+                nlpl_inputs[key] = nlpl_inputs[key].to(device)
             label = label.to(device)
 
             # forward
-            pred = model(inputs)
+            pred = model(nlnl_inputs, nlpl_inputs)
             all_pred.extend(pred.squeeze(1).tolist())
             true_labels.extend(label.squeeze(1).tolist())
 
@@ -241,7 +247,7 @@ def main():
     )
     parser.add_argument(
         "--max_seq_length", default=512, type=int,
-        help="The maximum total input sequence length after tokenization. Sequences longer than this will be truncated, sequences shorter will be padded. If left unset or set to None, this will use the predefined model maximum length"
+        help="The maximum total input sequence length after tokenization (max(len(nlnl_pair_tokens, nlpl_pair_tokens))). Sequences longer than this will be truncated, sequences shorter will be padded. If left unset or set to None, this will use the predefined model maximum length"
     )
 
     # action config
@@ -364,9 +370,11 @@ def main():
         else args.test_file
     )
     nlnl_tokenizer: Union[BertTokenizer, RobertaTokenizer] = RobertaTokenizer.from_pretrained(args.nlnl_model_name_or_path)
+    nlpl_tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained(args.nlpl_model_name_or_path)
     dataset: Dataset = PILinkDataset(
         file_path,
-        nlnl_tokenizer,
+        nlnl_model_tokenizer=nlnl_tokenizer,
+        nlpl_model_tokenizer=nlpl_tokenizer,
         max_input_length=args.max_seq_length
     )
     dataloader: DataLoader = DataLoader(
@@ -378,7 +386,8 @@ def main():
     if args.do_eval:
         eval_dataset: Dataset = PILinkDataset(
             args.eval_file,
-            nlnl_tokenizer,
+            nlnl_model_tokenizer=nlnl_tokenizer,
+            nlpl_model_tokenizer=nlpl_tokenizer,
             max_input_length=args.max_seq_length
         )
         eval_dataloader: DataLoader = DataLoader(
@@ -388,11 +397,6 @@ def main():
         )
 
     if args.do_train:
-        # freeze all parameters but those of linears
-        # for param in main_model.parameters():
-        #     param.requires_grad = False
-        # for param in main_model.linears.parameters():
-        #     param.requires_grad = True
 
         # check if {output_dir}/ckpt/{running_id} exists
         ckpt_output_dir: Path = output_dir.joinpath('ckpt', str(running_id))
@@ -411,7 +415,7 @@ def main():
             num_warmup_steps=args.warmup_steps,
             num_training_steps=args.num_train_epochs,
         )
-        loss_fn: nn.Module = nn.BCELoss()
+        loss_fn: nn.Module = nn.BCELoss() # TODO: replace it with BCEwithLogitsLoss
 
         # if model is loaded from checkpoint, load optimizer and scheduler
         if args.main_model_name_or_path is not None:
