@@ -4,7 +4,7 @@ from typing import Any, List, Optional, Union
 
 import torch.nn as nn
 import torch
-from transformers import BertModel, RobertaModel
+from transformers import BertModel, RobertaModel, T5EncoderModel
 
 from .model_config import PILinkModelConfig
 
@@ -14,7 +14,8 @@ class PILinkModel(nn.Module):
     PyTorch module for the PI Link Model.
 
     Attributes:
-        nlnl_model (RobertaModel): The underlying BERT model for natural language processing (NL-NL pair).
+        nlpl_model (T5EncoderModel): The underlying T5 model for natural language processing (NL-PL pair).
+        nlnl_model (Union[BertModel, RobertaModel]): The underlying BERT model for natural language processing (NL-NL pair).
         linears (nn.Sequential): Sequential module for linear layers.
         sigmoid (nn.Sigmoid): Sigmoid activation function.
 
@@ -27,14 +28,14 @@ class PILinkModel(nn.Module):
     def __init__(
         self,
         config: PILinkModelConfig = PILinkModelConfig(),
-        nlnl_model: Optional[RobertaModel] = None,
-        nlpl_model: Optional[RobertaModel] = None
+        nlnl_model: Optional[Union[BertModel, RobertaModel]] = None,
+        nlpl_model: Optional[T5EncoderModel] = None
     ):
         super(PILinkModel, self).__init__()
         self.config: PILinkModelConfig = config
 
-        self.nlnl_model: RobertaModel = RobertaModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
-        # TODO: add nlpl model
+        self.nlpl_model: T5EncoderModel = None # TODO: add nlpl model
+        self.nlnl_model: Union[BertModel, RobertaModel] = BertModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
 
         linear_block = lambda in_features, out_features: nn.Sequential(
             nn.Linear(in_features, out_features),
@@ -112,7 +113,7 @@ class PILinkModel(nn.Module):
             PILinkModel: The new model.
         """
         
-        nlnl_model: RobertaModel = RobertaModel.from_pretrained(nlnl_model_name_or_path)
+        nlnl_model: Union[BertModel, RobertaModel] = BertModel.from_pretrained(nlnl_model_name_or_path)
         # nlpl_model = TODO
         config: PILinkModelConfig = PILinkModelConfig(
             nlnl_model_config=nlnl_model.config,
