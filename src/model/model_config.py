@@ -1,6 +1,6 @@
 import json
 from os import PathLike
-from typing import Any, Dict, Union
+from typing import Any, Dict, List, Union
 
 from transformers import BertConfig, PretrainedConfig, RobertaConfig, T5Config
 
@@ -51,9 +51,9 @@ class PILinkModelConfig(PretrainedConfig):
         """
 
         super(PILinkModelConfig, self).__init__(**kwargs)
-        self.nlpl_model_config = nlpl_model_config
-        self.nlnl_model_config = nlnl_model_config
-        self.linear_sizes = linear_sizes
+        self.nlpl_model_config: T5Config = nlpl_model_config
+        self.nlnl_model_config: Union[BertConfig, RobertaConfig] = nlnl_model_config
+        self.linear_sizes: List[int] = linear_sizes
 
     def to_dict(self) -> Dict[str, Any]:
         """

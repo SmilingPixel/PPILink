@@ -50,6 +50,14 @@ def train(
 ) -> None:
     """
     Train the model.
+
+    Args:
+        dataloader (DataLoader): The data loader containing the training data.
+        model (nn.Module): The model to be trained.
+        device (Union[torch.device, str]): The device to be used for training.
+        loss_fn (nn.Module): The loss function used for training.
+        optimizer (torch.optim.Optimizer): The optimizer used for training.
+        scheduler (torch.optim.lr_scheduler.LRScheduler): The learning rate scheduler used for training.
     """
     start_time: float = time.time()
     model.train()
@@ -57,6 +65,7 @@ def train(
     batch_size = dataloader.batch_size
     total_loss: float = 0.0
     for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+        # move data to device
         for key in nlnl_inputs:
             nlnl_inputs[key] = nlnl_inputs[key].to(device)
         for key in nlpl_inputs:
@@ -68,7 +77,7 @@ def train(
         # forward
         pred = model(nlnl_inputs, nlpl_inputs)
         loss = loss_fn(pred, label)
-        total_loss += loss.item() * label.size(0)
+        total_loss += loss.item() * batch_size
 
         # backward
         loss.backward()
@@ -93,6 +102,12 @@ def eval(
 ) -> None:
     """
     Evaluate the model.
+
+    Args:
+        dataloader (DataLoader): The data loader for evaluation.
+        model (nn.Module): The model to be evaluated.
+        device (Union[torch.device, str]): The device to be used for evaluation.
+        loss_fn (nn.Module): The loss function used for evaluation.
     """
     start_time: float = time.time()
     model.eval()
@@ -101,6 +116,7 @@ def eval(
     total_loss: float = 0.0
     with torch.no_grad():
         for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+            # move data to device
             for key in nlnl_inputs:
                 nlnl_inputs[key] = nlnl_inputs[key].to(device)
             for key in nlpl_inputs:
@@ -110,7 +126,7 @@ def eval(
             # forward
             pred = model(nlnl_inputs, nlpl_inputs)
             loss = loss_fn(pred, label)
-            total_loss += loss.item() * label.size(0)
+            total_loss += loss.item() * batch_size
 
             # output log
             if (batch_idx + 1) % 10 == 0:
@@ -129,6 +145,11 @@ def test(
 ) -> Tuple[List[float], List[float]]:
     """
     Test the model.
+
+    Args:
+        dataloader (DataLoader): The data loader for testing.
+        model (nn.Module): The model to be tested.
+        device (Union[torch.device, str]): The device to be used for testing.
 
     Returns:
         all_pred: list of predictions
@@ -171,6 +192,12 @@ def save_ckpt(
 ) -> None:
     """
     Save checkpoint.
+
+    Args:
+        ckpt_output_dir (Union[str, Path]): The directory path where the checkpoint will be saved.
+        model (nn.Module): The model to be saved.
+        optimizer (Optional[torch.optim.Optimizer], optional): The optimizer state to be saved. Defaults to None.
+        scheduler (Optional[torch.optim.lr_scheduler.LRScheduler], optional): The scheduler state to be saved. Defaults to None.
     """
     ckpt_output_dir: Path = Path(ckpt_output_dir)
     ckpt_output_dir.mkdir(parents=True, exist_ok=True)
@@ -190,6 +217,12 @@ def load_opt_sched_from_ckpt(
 ) -> None:
     """
     Load checkpoint.
+
+    Args:
+        ckpt_output_dir (Union[str, Path]): The directory path where the checkpoint is saved.
+        optimizer (Optional[torch.optim.Optimizer], optional): The optimizer to be loaded. Defaults to None.
+        scheduler (Optional[torch.optim.lr_scheduler.LRScheduler], optional): The scheduler to be loaded. Defaults to None.
+        device (Union[torch.device, str], optional): The device to be used for loading. Defaults to 'cpu'.
     """
     ckpt_output_dir: Path = Path(ckpt_output_dir)
     if optimizer is not None:
@@ -228,7 +261,7 @@ def main():
 
     # optional: load model from checkpoint
     parser.add_argument("--main_model_name_or_path", default=None, type=str,
-        help="The model checkpoint dir for weights initialization. If do_train, ckpt of optimizer and scheduler should also be provided."
+        help="The model checkpoint dir for weights initialization. Must be provided if do_train is False. If provided, nlnl_model_name_or_path and nlpl_model_name_or_path will be ignored."
     )
     
 
@@ -265,7 +298,7 @@ def main():
         help="Batch size for evaluation."
     )
     parser.add_argument(
-        "--learning_rate", default=3e-5, type=float,
+        "--learning_rate", default=1e-5, type=float,
         help="The peak learning rate."
     )
     parser.add_argument(
@@ -307,7 +340,7 @@ def main():
     # running config
     parser.add_argument(
         '--device', type=str, default='cpu',
-        help='device to run on, cpu, cuda or dml'
+        help='Device to run on, cpu, cuda or dml. Note: bugs may exist when using dml.'
     )
     parser.add_argument(
         '--device_id', type=int, default=0,
@@ -343,14 +376,13 @@ def main():
     if args.main_model_name_or_path is None and (args.nlnl_model_name_or_path is None or args.nlpl_model_name_or_path is None):
         raise ValueError('If main_model_name_or_path is not provided, both nlnl_model_name_or_path and nlpl_model_name_or_path must be provided.')
     # initialize model
-    # TODO: pr code model
     if args.main_model_name_or_path is not None: # load model from checkpoint
         main_model: PILinkModel = PILinkModel.from_trained_model(
             Path(args.main_model_name_or_path),
             device=device
         )
-    else: # initialize from scratch, and load NL-NL model and NL-PL model from pretrained model file
-        main_model: PILinkModel = PILinkModel.from_scratch(
+    else: # initialize a new model, and load NL-NL model and NL-PL model from pretrained model file
+        main_model: PILinkModel = PILinkModel.from_pretrained_components(
             args.nlnl_model_name_or_path,
             args.nlpl_model_name_or_path,
             device=device
@@ -358,12 +390,12 @@ def main():
 
     if not args.do_train and not args.do_test:
         raise ValueError('At least one of `do_train`, or `do_test` must be True.')
-    if int(args.do_train) + int(args.do_test) > 1:
+    if args.do_train and args.do_test:
         raise ValueError('Only one of `do_train`, or `do_test` can be True.')
     if args.do_eval and not args.do_train:
         raise ValueError('`do_eval` can only be True when `do_train` is True.')
     
-    # initialize dataset
+    # initialize dataset (train or test)
     file_path: Union[str, Path] = (
         args.train_file if args.do_train
         else args.eval_file if args.do_eval
@@ -383,6 +415,7 @@ def main():
         shuffle=True,
     )
 
+    # initialize eval dataset
     if args.do_eval:
         eval_dataset: Dataset = PILinkDataset(
             args.eval_file,
@@ -427,6 +460,7 @@ def main():
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
             train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
 
+            # eval after each epoch of training
             if args.do_eval:
                 eval(eval_dataloader, main_model, device, loss_fn)
 
@@ -452,26 +486,28 @@ def main():
         # output results to {output_dir}/test_results/{running_id}
         test_results_dir: Path = output_dir.joinpath('tests', str(running_id))
         test_results_dir.mkdir(parents=True, exist_ok=True)
-        with torch.no_grad():
-            preds, true_labels = test(dataloader, main_model, device)
 
-            pred_prob: List[float] = preds
-            pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
+        # torch.no_grad() is in test()
 
-            # output as json file
-            test_results_file_path: Path = test_results_dir.joinpath('test_results.json')
-            with open(test_results_file_path, 'w') as f:
-                json.dump({
-                    'pred_prob': pred_prob,
-                    'pred_labels': pred_labels,
-                    'true_labels': true_labels
-                }, f)
+        preds, true_labels = test(dataloader, main_model, device)
 
-            # generate test report
-            test_report.generate_test_report(
-                test_results_file_path,
-                test_results_dir.joinpath('test_report.json')
-            )
+        pred_prob: List[float] = preds
+        pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
+
+        # output as json file
+        test_results_file_path: Path = test_results_dir.joinpath('test_results.json')
+        with open(test_results_file_path, 'w') as f:
+            json.dump({
+                'pred_prob': pred_prob,
+                'pred_labels': pred_labels,
+                'true_labels': true_labels
+            }, f)
+
+        # generate test report
+        test_report.generate_test_report(
+            test_results_file_path,
+            test_results_dir.joinpath('test_report.json')
+        )
 
 
 if __name__ == "__main__":

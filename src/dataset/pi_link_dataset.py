@@ -63,6 +63,14 @@ class PILinkDataset(Dataset):
     """
     Dataset for PI Link
 
+    Attributes:
+        nlnl_model_tokenizer (Union[BertTokenizer, RobertaTokenizer]): The tokenizer for natural language to natural language model.
+        nlpl_model_tokenizer (RobertaTokenizer): The tokenizer for natural language to program language model.
+        max_input_length (int): The maximum input length for tokenization.
+        all_issues (List[dict]): The list of all issues.
+        all_prs (List[dict]): The list of all PRs.
+        links (List[dict]): The list of links between issues and PRs (label is 0 or 1).
+
     """
 
     def __init__(
@@ -89,6 +97,16 @@ class PILinkDataset(Dataset):
         return len(self.links)
 
     def __getitem__(self, idx):
+        """
+        Get the item at the given index.
+
+        Args:
+            idx (int): The index of the item to get.
+        
+        Returns:
+            Tuple[dict, dict, torch.Tensor]: The tokenized natural language to natural language pair, the tokenized natural language to program language pair, and the link label.
+        
+        """
         link_info = self.links[idx]
         issue_idx, pr_idx, link = link_info['issue_idx'], link_info['pr_idx'], link_info['link']
         issue, pr = self.all_issues[issue_idx], self.all_prs[pr_idx]

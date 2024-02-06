@@ -21,6 +21,7 @@ class PILinkModel(nn.Module):
 
     Methods:
         from_trained_model: Load a trained model from a specified directory.
+        from_pretrained_components: Create a new model. Initializes the NL-NL and NL-PL model from pretrained models.
         forward: Forward pass for the model.
 
     """
@@ -37,19 +38,21 @@ class PILinkModel(nn.Module):
         self.nlpl_model: T5EncoderModel = T5EncoderModel(config.nlpl_model_config) if nlpl_model is None else nlpl_model
         self.nlnl_model: Union[BertModel, RobertaModel] = RobertaModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
 
-        linear_block = lambda in_features, out_features: nn.Sequential(
+        # config.linears ignore the first size, which is sum of the NL-NL and NL-PL model hidden sizes,
+        # and the last size, which is 1.
+        linear_block: callable = lambda in_features, out_features: nn.Sequential(
             nn.Linear(in_features, out_features),
             nn.ReLU(),
         )
-        linear_blocks = [
+        linear_blocks: List[nn.Sequential] = [
             linear_block(in_features, out_features)
             for in_features, out_features
             in zip([config.nlnl_model_config.hidden_size] + config.linear_sizes, config.linear_sizes)
         ]
-        linears_but_last = nn.Sequential(*linear_blocks)
+        linears_but_last: nn.Sequential = nn.Sequential(*linear_blocks)
 
-        self.linears = nn.Sequential(linears_but_last, nn.Linear(([config.nlnl_model_config.hidden_size] + config.linear_sizes)[-1], 1))
-        self.sigmoid = nn.Sigmoid()
+        self.linears: nn.Sequential = nn.Sequential(linears_but_last, nn.Linear(([config.nlnl_model_config.hidden_size] + config.linear_sizes)[-1], 1))
+        self.sigmoid: nn.Sigmoid = nn.Sigmoid()
 
     @classmethod
     def from_trained_model(
@@ -92,17 +95,17 @@ class PILinkModel(nn.Module):
             raise ValueError(f"Model file {model_path} does not exist.")
         model.load_state_dict(torch.load(model_path, map_location=device))
 
-        return model
+        return model.to(device)
     
     @classmethod
-    def from_scratch(
+    def from_pretrained_components(
         cls,
         nlnl_model_name_or_path: Union[str, Path],
         nlpl_model_name_or_path: Union[str, Path],
         device: Union[str, torch.device] = "cpu"
     ) -> 'PILinkModel':
         """
-        Create a new model from scratch. Initializes the NL-NL and NL-PL model from pretrained.
+        Create a new model. Initializes the NL-NL and NL-PL model from pretrained.
 
         Args:
             nlnl_model_name_or_path (Union[str, Path]): The name or path of the NL-NL model to load.
