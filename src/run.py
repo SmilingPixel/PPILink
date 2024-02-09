@@ -77,7 +77,7 @@ def train(
         # forward
         pred = model(nlnl_inputs, nlpl_inputs)
         loss = loss_fn(pred, label)
-        total_loss += loss.item() * batch_size
+        total_loss += loss.item()
 
         # backward
         loss.backward()
@@ -126,7 +126,7 @@ def eval(
             # forward
             pred = model(nlnl_inputs, nlpl_inputs)
             loss = loss_fn(pred, label)
-            total_loss += loss.item() * batch_size
+            total_loss += loss.item()
 
             # output log
             if (batch_idx + 1) % 10 == 0:
