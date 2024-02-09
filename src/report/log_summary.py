@@ -18,7 +18,7 @@ def plot_loss_curve(epochs: List[int], train_losses: List[float], eval_losses: L
     plt.savefig(output_file)
 
 def generate_log_summary_from_file(input_file: Path, output_file: Path):
-    #Extract epoch and total loss
+    # Extract epoch and total loss
     epoch_pattern = r"Epoch (\d+)"
     loss_pattern = r"average loss: (\d+\.\d+)"
     epochs, train_losses, eval_losses = [], [], []
@@ -26,10 +26,10 @@ def generate_log_summary_from_file(input_file: Path, output_file: Path):
         if 'Epoch' in line:
             epoch = re.search(epoch_pattern, line).group(1)
             epochs.append(int(epoch))
-        if 'This epoch training' in line:
+        elif 'This epoch training' in line:
             loss = re.search(loss_pattern, line).group(1)
             train_losses.append(float(loss))
-        elif 'This epoch evaluation' in line:
+        elif 'This epoch eval' in line:
             loss = re.search(loss_pattern, line).group(1)
             eval_losses.append(float(loss))
 
