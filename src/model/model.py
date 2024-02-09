@@ -47,7 +47,7 @@ class PILinkModel(nn.Module):
         linear_blocks: List[nn.Sequential] = [
             linear_block(in_features, out_features)
             for in_features, out_features
-            in zip([config.nlnl_model_config.hidden_size] + config.linear_sizes, config.linear_sizes)
+            in zip([config.nlnl_model_config.hidden_size + config.nlpl_model_config.hidden_size] + config.linear_sizes, config.linear_sizes)
         ]
         linears_but_last: nn.Sequential = nn.Sequential(*linear_blocks)
 
