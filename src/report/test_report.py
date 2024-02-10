@@ -15,13 +15,18 @@ from sklearn.metrics import classification_report
 # }
 
 
-def generate_test_report(input_file: Path, output_file: Path):
+def generate_test_report(y_true: List[int], y_pred: List[int]) -> Dict:
+    report: Dict = classification_report(y_true, y_pred, output_dict=True)
+    return report
+
+
+def generate_test_report_file2file(input_file: Path, output_file: Path):
     with open(input_file, 'r') as f:
         data = json.load(f)
     
     y_true: List[int] = data['true_labels']
     y_pred = data['pred_labels']
-    report: Dict = classification_report(y_true, y_pred, output_dict=True)
+    report: Dict = generate_test_report(y_true, y_pred)
 
     with open(output_file, 'w') as f:
         json.dump(report, f, indent=2)
@@ -38,7 +43,7 @@ def main():
     input_file: Path = Path(args.input)
     output_file: Path = Path(args.output)
 
-    generate_test_report(input_file, output_file)
+    generate_test_report_file2file(input_file, output_file)
 
 
 if __name__ == '__main__':
