@@ -114,6 +114,8 @@ def eval(
     total_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
     total_loss: float = 0.0
+    pred_prob: List[float] = []
+    true_labels: Union[List[int], List[float]] = []
     with torch.no_grad():
         for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
             # move data to device
@@ -127,6 +129,8 @@ def eval(
             pred = model(nlnl_inputs, nlpl_inputs)
             loss = loss_fn(pred, label)
             total_loss += loss.item()
+            pred_prob.extend(pred.squeeze(1).tolist())
+            true_labels.extend(label.squeeze(1).tolist())
 
             # output log
             if (batch_idx + 1) % 10 == 0:
@@ -135,7 +139,11 @@ def eval(
     
     end_time: float = time.time()
     average_loss: float = total_loss / len(dataloader)
-    logger.info(f'This epoch eval time: {end_time - start_time}s, average loss: {average_loss:.4f}')
+    pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
+    true_labels: List[int] = [int(l) for l in true_labels]
+    eval_report: dict = test_report.generate_test_report(true_labels, pred_labels)
+    accuracy: float = eval_report['accuracy']
+    logger.info(f'This epoch eval time: {end_time - start_time}s, average loss: {average_loss:.4f}, accuracy: {accuracy:.4f}')
 
 
 def test(
@@ -159,8 +167,8 @@ def test(
     model.eval()
     total_size = len(dataloader.dataset)
     batch_size = dataloader.batch_size
-    all_pred: list[float] = []
-    true_labels: list[float] = []
+    pred_prob: List[float] = []
+    true_labels: List[float] = []
     with torch.no_grad():
         for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
             for key in nlnl_inputs:
@@ -171,7 +179,7 @@ def test(
 
             # forward
             pred = model(nlnl_inputs, nlpl_inputs)
-            all_pred.extend(pred.squeeze(1).tolist())
+            pred_prob.extend(pred.squeeze(1).tolist())
             true_labels.extend(label.squeeze(1).tolist())
 
             # output log
@@ -181,7 +189,7 @@ def test(
     
     end_time: float = time.time()
     logger.info(f'This epoch testing time: {end_time - start_time}s')
-    return all_pred, true_labels
+    return pred_prob, true_labels
 
 
 def save_ckpt(
@@ -491,6 +499,8 @@ def main():
 
         preds, true_labels = test(dataloader, main_model, device)
 
+        true_labels: List[int] = [int(l) for l in true_labels]
+
         pred_prob: List[float] = preds
         pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
 
@@ -504,7 +514,7 @@ def main():
             }, f)
 
         # generate test report
-        test_report.generate_test_report(
+        test_report.generate_test_report_file2file(
             test_results_file_path,
             test_results_dir.joinpath('test_report.json')
         )
