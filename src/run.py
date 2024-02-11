@@ -6,7 +6,7 @@ import json
 import random
 import time
 from pathlib import Path
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, Dict, List, Optional, Union, Tuple
 
 import numpy as np
 import torch
@@ -99,7 +99,7 @@ def eval(
     model: nn.Module,
     device: Union[torch.device, str],
     loss_fn: nn.Module,
-) -> None:
+) -> Tuple[List[float], List[int], List[int], Dict[str, Any]]:
     """
     Evaluate the model.
 
@@ -108,6 +108,12 @@ def eval(
         model (nn.Module): The model to be evaluated.
         device (Union[torch.device, str]): The device to be used for evaluation.
         loss_fn (nn.Module): The loss function used for evaluation.
+
+    Returns:
+        pred_prob: list of predictions
+        pred_labels: list of predicted labels
+        true_labels: list of true labels
+        eval_report: evaluation report
     """
     start_time: float = time.time()
     model.eval()
@@ -144,52 +150,7 @@ def eval(
     eval_report: dict = test_report.generate_test_report(true_labels, pred_labels)
     accuracy: float = eval_report['accuracy']
     logger.info(f'This epoch eval time: {end_time - start_time}s, average loss: {average_loss:.4f}, accuracy: {accuracy:.4f}')
-
-
-def test(
-    dataloader: DataLoader,
-    model: nn.Module,
-    device: torch.device | str,
-) -> Tuple[List[float], List[float]]:
-    """
-    Test the model.
-
-    Args:
-        dataloader (DataLoader): The data loader for testing.
-        model (nn.Module): The model to be tested.
-        device (Union[torch.device, str]): The device to be used for testing.
-
-    Returns:
-        all_pred: list of predictions
-        true_labels: list of true labels
-    """
-    start_time: float = time.time()
-    model.eval()
-    total_size = len(dataloader.dataset)
-    batch_size = dataloader.batch_size
-    pred_prob: List[float] = []
-    true_labels: List[float] = []
-    with torch.no_grad():
-        for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
-            for key in nlnl_inputs:
-                nlnl_inputs[key] = nlnl_inputs[key].to(device)
-            for key in nlpl_inputs:
-                nlpl_inputs[key] = nlpl_inputs[key].to(device)
-            label = label.to(device)
-
-            # forward
-            pred = model(nlnl_inputs, nlpl_inputs)
-            pred_prob.extend(pred.squeeze(1).tolist())
-            true_labels.extend(label.squeeze(1).tolist())
-
-            # output log
-            if (batch_idx + 1) % 10 == 0:
-                current = min((batch_idx + 1) * batch_size, total_size)
-                logger.info(f'[{current:>5d}/{total_size:>5d}]')
-    
-    end_time: float = time.time()
-    logger.info(f'This epoch testing time: {end_time - start_time}s')
-    return pred_prob, true_labels
+    return pred_prob, pred_labels, true_labels, eval_report
 
 
 def save_ckpt(
@@ -423,6 +384,8 @@ def main():
         shuffle=True,
     )
 
+    loss_fn: nn.Module = nn.BCELoss() # TODO: replace it with BCEwithLogitsLoss
+
     # initialize eval dataset
     if args.do_eval:
         eval_dataset: Dataset = PILinkDataset(
@@ -456,7 +419,6 @@ def main():
             num_warmup_steps=args.warmup_steps,
             num_training_steps=args.num_train_epochs,
         )
-        loss_fn: nn.Module = nn.BCELoss() # TODO: replace it with BCEwithLogitsLoss
 
         # if model is loaded from checkpoint, load optimizer and scheduler
         if args.main_model_name_or_path is not None:
@@ -495,16 +457,11 @@ def main():
         test_results_dir: Path = output_dir.joinpath('tests', str(running_id))
         test_results_dir.mkdir(parents=True, exist_ok=True)
 
-        # torch.no_grad() is in test()
+        # torch.no_grad() is in eval()
 
-        preds, true_labels = test(dataloader, main_model, device)
+        pred_prob, pred_labels, true_labels, eval_report = eval(dataloader, main_model, device, loss_fn)
 
-        true_labels: List[int] = [int(l) for l in true_labels]
-
-        pred_prob: List[float] = preds
-        pred_labels: List[int] = [1 if p > 0.5 else 0 for p in pred_prob]
-
-        # output as json file
+        # output results as json file
         test_results_file_path: Path = test_results_dir.joinpath('test_results.json')
         with open(test_results_file_path, 'w') as f:
             json.dump({
@@ -513,11 +470,10 @@ def main():
                 'true_labels': true_labels
             }, f)
 
-        # generate test report
-        test_report.generate_test_report_file2file(
-            test_results_file_path,
-            test_results_dir.joinpath('test_report.json')
-        )
+        # output report as json file
+        test_report_file_path: Path = test_results_dir.joinpath('test_report.json')
+        with open(test_report_file_path, 'w') as f:
+            json.dump(eval_report, f, indent=2)
 
 
 if __name__ == "__main__":
