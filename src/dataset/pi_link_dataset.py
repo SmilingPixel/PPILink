@@ -289,7 +289,7 @@ class PILinkDataset(Dataset):
         nlpl_res_tokens: dict = {
             'input_ids': torch.cat(
                 (pr_pl_tokens['input_ids'][0][:-1], single_msg_tensor, issue_nl_tokens['input_ids'][0][1:-1], paddings_tokens['input_ids'])
-            ), # [1:] to remove <c> of pr_nl_tokens, and add <msg> before it
+            ), # [1:] to remove <c> of pr_pl_tokens, and add <msg> before it
             'attention_mask': torch.cat(
                 (pr_pl_tokens['attention_mask'][0][:-1], issue_nl_tokens['attention_mask'][0][:-1], paddings_tokens['attention_mask'])
             ),
