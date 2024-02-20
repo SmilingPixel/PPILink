@@ -228,7 +228,7 @@ def main():
         shuffle=True,
     )
 
-    loss_fn: nn.Module = nn.BCEwithLogitsLoss()
+    loss_fn: nn.Module = nn.BCEWithLogitsLoss()
 
     # initialize eval dataset
     if args.do_eval:
