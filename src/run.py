@@ -15,7 +15,7 @@ from transformers import BertModel, BertTokenizer, RobertaModel, RobertaTokenize
 from dataset.pi_link_dataset import PILinkDataset
 from model.model import PILinkModel
 from report import log_summary, test_report
-from run_util import get_arg_parser, load_opt_sched_from_ckpt, save_model_ckpt, save_opt_sched_to_ckpt, set_seed
+from run_util import get_arg_parser, get_logger, load_opt_sched_from_ckpt, save_model_ckpt, save_opt_sched_to_ckpt, set_seed
 
 
 # use time as a unique running id
@@ -23,20 +23,11 @@ from run_util import get_arg_parser, load_opt_sched_from_ckpt, save_model_ckpt, 
 running_id: str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 # configure logging
-Path('../logs').mkdir(exist_ok=True)
-logging_format: logging.Formatter = logging.Formatter(
-    fmt='%(asctime)s - %(levelname)s - %(name)s -  %(message)s',
-    datefmt='%m/%d/%Y %H:%M:%S'
-)
-logger: logging.Logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-log_file_path_str: str = f'logs/{running_id}.log'
-file_handler: logging.FileHandler = logging.FileHandler(log_file_path_str)
-file_handler.setFormatter(logging_format)
-consola_handler: logging.StreamHandler = logging.StreamHandler()
-consola_handler.setFormatter(logging_format)
-logger.addHandler(file_handler)
-logger.addHandler(consola_handler)
+log_dir: Path = Path('../logs')
+log_dir.mkdir(exist_ok=True)
+log_file_path: Path = log_dir.joinpath(f'{running_id}.log')
+logger: logging.Logger = get_logger(__name__, log_file_path)
+
 
 
 def train(
@@ -100,7 +91,7 @@ def eval(
     model: nn.Module,
     device: Union[torch.device, str],
     loss_fn: nn.Module,
-) -> Tuple[List[float], List[int], List[int], Dict[str, Any]]:
+) -> Tuple[List[float], List[int], List[int], Dict[str, Any], float]:
     """
     Evaluate the model.
 
@@ -115,6 +106,7 @@ def eval(
         pred_labels: list of predicted labels
         true_labels: list of true labels
         eval_report: evaluation report
+        average_loss: average loss
     """
     start_time: float = time.time()
     model.eval()
@@ -152,7 +144,7 @@ def eval(
     eval_report: dict = test_report.generate_test_report(true_labels, pred_labels)
     accuracy: float = eval_report['accuracy']
     logger.info(f'This epoch eval time: {end_time - start_time}s, average loss: {average_loss:.4f}, accuracy: {accuracy:.4f}')
-    return pred_prob, pred_labels, true_labels, eval_report
+    return pred_prob, pred_labels, true_labels, eval_report, average_loss
 
 
 def main():
@@ -276,7 +268,7 @@ def main():
 
             # eval after each epoch of training
             if args.do_eval:
-                eval(eval_dataloader, main_model, device, loss_fn)
+                pred_prob, pred_labels, true_labels, eval_report, average_loss = eval(eval_dataloader, main_model, device, loss_fn)
 
             if (epoch + 1) % args.save_steps == 0:
                 save_model_ckpt(
@@ -306,7 +298,7 @@ def main():
 
         # torch.no_grad() is in eval(), as decorator
 
-        pred_prob, pred_labels, true_labels, eval_report = eval(dataloader, main_model, device, loss_fn)
+        pred_prob, pred_labels, true_labels, eval_report, average_loss = eval(dataloader, main_model, device, loss_fn)
 
         # output results as json file
         test_results_file_path: Path = test_results_dir.joinpath('test_results.json')

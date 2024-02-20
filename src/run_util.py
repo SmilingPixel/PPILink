@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import random
 from pathlib import Path
@@ -195,3 +196,32 @@ def set_seed(seed: int) -> None:
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+
+
+def get_logger(logger_name: str, log_file_path: Optional[Path] = None) -> logging.Logger:
+    """
+    Get a logger.
+    The returned logger output to console only. If log_file is provided, it will also output to the file.
+
+    Args:
+        logger_name (str): The name of the logger.
+        log_file_path (Optional[Path], optional): The log file. Defaults to None.
+
+    Returns:
+        logging.Logger: The logger.
+    """
+    
+    logging_format: logging.Formatter = logging.Formatter(
+        fmt='%(asctime)s - %(levelname)s - %(name)s -  %(message)s',
+        datefmt='%m/%d/%Y %H:%M:%S'
+    )
+    logger: logging.Logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.INFO)
+    file_handler: logging.FileHandler = logging.FileHandler(log_file_path)
+    file_handler.setFormatter(logging_format)
+    consola_handler: logging.StreamHandler = logging.StreamHandler()
+    consola_handler.setFormatter(logging_format)
+    logger.addHandler(file_handler)
+    logger.addHandler(consola_handler)
+
+    return logger
