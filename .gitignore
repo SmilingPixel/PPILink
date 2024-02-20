@@ -36,3 +36,5 @@ cython_debug/
 
 # logs
 logs/
+tensorboard_runs/
+runs/

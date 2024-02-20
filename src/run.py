@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
+from torch.utils.tensorboard import SummaryWriter
 from transformers import BertModel, BertTokenizer, RobertaModel, RobertaTokenizer, get_linear_schedule_with_warmup
 
 from dataset.pi_link_dataset import PILinkDataset
@@ -28,6 +29,10 @@ log_dir.mkdir(exist_ok=True)
 log_file_path: Path = log_dir.joinpath(f'{running_id}.log')
 logger: logging.Logger = get_logger(__name__, log_file_path)
 
+# configure tensorboard
+tensorboard_dir: Path = Path('../tensorboard_runs')
+tensorboard_dir.mkdir(exist_ok=True)
+tensorboard_writer: SummaryWriter = SummaryWriter()
 
 
 def train(
@@ -37,7 +42,7 @@ def train(
     loss_fn: nn.Module,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler.LRScheduler
-) -> None:
+) -> float:
     """
     Train the model.
 
@@ -48,6 +53,9 @@ def train(
         loss_fn (nn.Module): The loss function used for training.
         optimizer (torch.optim.Optimizer): The optimizer used for training.
         scheduler (torch.optim.lr_scheduler.LRScheduler): The learning rate scheduler used for training.
+
+    Returns:
+        float: The average loss of the training.
     """
     start_time: float = time.time()
     model.train()
@@ -83,6 +91,8 @@ def train(
     end_time: float = time.time()
     average_loss: float = total_loss / len(dataloader)
     logger.info(f'This epoch training time: {end_time - start_time}s, average loss: {average_loss:.4f}')
+
+    return average_loss
 
 
 @torch.no_grad()
@@ -264,11 +274,22 @@ def main():
         epoch_num_max_len: int = len(str(args.num_train_epochs))
         for epoch in range(scheduler.last_epoch, args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
-            train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
+            average_train_loss: float = train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
+
+            tensorboard_writer.add_scalars(
+                'Loss', 
+                {'train': average_train_loss,},
+                epoch + 1
+            )
 
             # eval after each epoch of training
             if args.do_eval:
-                pred_prob, pred_labels, true_labels, eval_report, average_loss = eval(eval_dataloader, main_model, device, loss_fn)
+                pred_prob, pred_labels, true_labels, eval_report, average_eval_loss = eval(eval_dataloader, main_model, device, loss_fn)
+                tensorboard_writer.add_scalars(
+                    'Loss',
+                    {'eval': average_eval_loss},
+                    epoch + 1
+                )
 
             if (epoch + 1) % args.save_steps == 0:
                 save_model_ckpt(
@@ -287,7 +308,7 @@ def main():
 
         # summary log
         log_summary.generate_log_summary_from_file(
-            Path(log_file_path_str),
+            Path(log_file_path),
             ckpt_output_dir.joinpath('train_summary.png')
         )
         
@@ -297,8 +318,7 @@ def main():
         test_results_dir.mkdir(parents=True, exist_ok=True)
 
         # torch.no_grad() is in eval(), as decorator
-
-        pred_prob, pred_labels, true_labels, eval_report, average_loss = eval(dataloader, main_model, device, loss_fn)
+        pred_prob, pred_labels, true_labels, eval_report, average_eval_loss = eval(dataloader, main_model, device, loss_fn)
 
         # output results as json file
         test_results_file_path: Path = test_results_dir.joinpath('test_results.json')
@@ -318,3 +338,5 @@ def main():
 if __name__ == "__main__":
     # TODO: check and refactor all doc
     main()
+
+    tensorboard_writer.close()
