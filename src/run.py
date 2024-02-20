@@ -74,8 +74,9 @@ def train(
         optimizer.zero_grad()
 
         # forward
-        pred = model(nlnl_inputs, nlpl_inputs)
-        loss = loss_fn(pred, label)
+        model_output = model(nlnl_inputs, nlpl_inputs)
+        # prob = torch.sigmoid(model_output)
+        loss = loss_fn(model_output, label)
         total_loss += loss.item()
 
         # backward
@@ -93,6 +94,7 @@ def train(
     logger.info(f'This epoch training time: {end_time - start_time}s, average loss: {average_loss:.4f}')
 
 
+@torch.no_grad()
 def eval(
     dataloader: DataLoader,
     model: nn.Module,
@@ -121,26 +123,27 @@ def eval(
     total_loss: float = 0.0
     pred_prob: List[float] = []
     true_labels: Union[List[int], List[float]] = []
-    with torch.no_grad():
-        for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
-            # move data to device
-            for key in nlnl_inputs:
-                nlnl_inputs[key] = nlnl_inputs[key].to(device)
-            for key in nlpl_inputs:
-                nlpl_inputs[key] = nlpl_inputs[key].to(device)
-            label = label.to(device)
 
-            # forward
-            pred = model(nlnl_inputs, nlpl_inputs)
-            loss = loss_fn(pred, label)
-            total_loss += loss.item()
-            pred_prob.extend(pred.squeeze(1).tolist())
-            true_labels.extend(label.squeeze(1).tolist())
+    for batch_idx, (nlnl_inputs, nlpl_inputs, label) in enumerate(dataloader):
+        # move data to device
+        for key in nlnl_inputs:
+            nlnl_inputs[key] = nlnl_inputs[key].to(device)
+        for key in nlpl_inputs:
+            nlpl_inputs[key] = nlpl_inputs[key].to(device)
+        label = label.to(device)
 
-            # output log
-            if (batch_idx + 1) % 10 == 0:
-                loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
-                logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
+        # forward
+        model_output = model(nlnl_inputs, nlpl_inputs)
+        prob = torch.sigmoid(model_output)
+        loss = loss_fn(model_output, label)
+        total_loss += loss.item()
+        pred_prob.extend(prob.squeeze(1).tolist())
+        true_labels.extend(label.squeeze(1).tolist())
+
+        # output log
+        if (batch_idx + 1) % 10 == 0:
+            loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
+            logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
     
     end_time: float = time.time()
     average_loss: float = total_loss / len(dataloader)
@@ -225,7 +228,7 @@ def main():
         shuffle=True,
     )
 
-    loss_fn: nn.Module = nn.BCELoss() # TODO: replace it with BCEwithLogitsLoss
+    loss_fn: nn.Module = nn.BCEwithLogitsLoss()
 
     # initialize eval dataset
     if args.do_eval:
@@ -301,7 +304,7 @@ def main():
         test_results_dir: Path = output_dir.joinpath('tests', str(running_id))
         test_results_dir.mkdir(parents=True, exist_ok=True)
 
-        # torch.no_grad() is in eval()
+        # torch.no_grad() is in eval(), as decorator
 
         pred_prob, pred_labels, true_labels, eval_report = eval(dataloader, main_model, device, loss_fn)
 

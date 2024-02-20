@@ -52,7 +52,6 @@ class PILinkModel(nn.Module):
         linears_but_last: nn.Sequential = nn.Sequential(*linear_blocks)
 
         self.linears: nn.Sequential = nn.Sequential(linears_but_last, nn.Linear(([config.nlnl_model_config.hidden_size] + config.linear_sizes)[-1], 1))
-        self.sigmoid: nn.Sigmoid = nn.Sigmoid()
 
     @classmethod
     def from_trained_model(
@@ -150,6 +149,5 @@ class PILinkModel(nn.Module):
         nlpl_vec = nlpl_vec[:,0,:]
         vec = torch.cat((nlnl_vec, nlpl_vec), dim=1) # concatenate the two vectors
         out = self.linears(vec)
-        out = self.sigmoid(out)
         return out
     
