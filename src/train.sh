@@ -1,11 +1,16 @@
 python3 run.py \
     --do_train \
+    --do_eval \
     --nlnl_model_name_or_path ../models/roberta-base/ \
-    --nlpl_model_name_or_path ../models/code-bert-base/ \
-    --train_batch_size 64 \
+    --nlpl_model_name_or_path ../models/codereviewer/ \
+    --nlnl_tokenizer_name_or_path ../models/roberta-base/ \
+    --nlpl_tokenizer_name_or_path ../models/codereviewer/ \
+    --learning_rate 1e-5 \
+    --train_batch_size 8 \
     --output_dir ../output \
-    --train_file ../data/small_dataset/android_closed_issues_2011-01-01_2021-01-01_cluster_range_00000-11999_preprocessed.json \
-    --num_train_epochs 24 \
+    --train_file ../data/cluster_00000-17999/00000-11999_text_preprocessed_commits_filtered_preprocessed.json \
+    --eval_file ../data/cluster_00000-17999/12000-14999_text_preprocessed_commits_filtered_preprocessed.json \
+    --num_train_epochs 18 \
     --warmup_steps 4 \
     --save_steps 6 \
     --device cuda
