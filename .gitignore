@@ -35,4 +35,4 @@ ipython_config.py
 cython_debug/
 
 # logs
-src/logs/
+logs/
