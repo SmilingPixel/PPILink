@@ -32,10 +32,10 @@ logger: logging.Logger = get_logger(__name__, log_file_path)
 # configure tensorboard
 tensorboard_dir: Path = Path('../tensorboard_runs')
 tensorboard_dir.mkdir(exist_ok=True)
-tensorboard_writer: SummaryWriter = SummaryWriter()
+tensorboard_writer: SummaryWriter = SummaryWriter(tensorboard_dir.joinpath(running_id))
 
 
-def train(
+def train_epoch(
     dataloader: DataLoader,
     model: nn.Module,
     device: Union[torch.device, str],
@@ -82,7 +82,7 @@ def train(
         loss.backward()
         optimizer.step()
 
-        # output log
+        # output log per mini-batch
         if (batch_idx + 1) % 10 == 0:
             loss, current = loss.item(), min((batch_idx + 1) * batch_size, total_size)
             logger.info(f'loss: {loss:>7f} [{current:>5d}/{total_size:>5d}]')
@@ -202,7 +202,6 @@ def main():
             args.nlpl_model_name_or_path,
             device=device
         )
-    tensorboard_writer.add_graph(main_model)
 
     if not args.do_train and not args.do_test:
         raise ValueError('At least one of `do_train`, or `do_test` must be True.')
@@ -213,9 +212,7 @@ def main():
     
     # initialize dataset (train or test)
     dataset_file_path: Union[str, Path] = (
-        args.train_file if args.do_train
-        else args.eval_file if args.do_eval
-        else args.test_file
+        args.train_file if args.do_train else args.test_file
     )
     nlnl_tokenizer: Union[BertTokenizer, RobertaTokenizer] = RobertaTokenizer.from_pretrained(args.nlnl_tokenizer_name_or_path)
     nlpl_tokenizer: RobertaTokenizer = RobertaTokenizer.from_pretrained(args.nlpl_tokenizer_name_or_path)
