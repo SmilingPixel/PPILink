@@ -272,7 +272,7 @@ def main():
         epoch_num_max_len: int = len(str(args.num_train_epochs))
         for epoch in range(scheduler.last_epoch, args.num_train_epochs):
             logger.info(f'Epoch {epoch + 1}/{args.num_train_epochs}')
-            average_train_loss: float = train(dataloader, main_model, device, loss_fn, optimizer, scheduler)
+            average_train_loss: float = train_epoch(dataloader, main_model, device, loss_fn, optimizer, scheduler)
 
             tensorboard_writer.add_scalars(
                 'Loss', 
