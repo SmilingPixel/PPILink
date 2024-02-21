@@ -156,7 +156,7 @@ class PILinkDataset(Dataset):
                 padding=False,
                 truncation=True,
                 is_split_into_words=True,
-            )
+            ) # [CLS] [tokens] [SEP]
             issue_nl_tokens: dict = self.nlnl_model_tokenizer(
                 issue_nl,
                 return_tensors='pt',
@@ -164,7 +164,7 @@ class PILinkDataset(Dataset):
                 padding=False,
                 truncation=True,
                 is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
-            )
+            ) # [CLS] [tokens] [SEP]
 
             # ATTENTION:
             # - RoBERTa doesn’t have token_type_ids (https://huggingface.co/docs/transformers/model_doc/roberta#overview)
@@ -186,7 +186,7 @@ class PILinkDataset(Dataset):
                 'attention_mask': torch.cat(
                     (pr_nl_tokens['attention_mask'][0], issue_nl_tokens['attention_mask'][0], paddings_tokens['attention_mask'])
                 ),
-            }
+            } # [CLS] [tokens] [SEP] [SEP] [tokens] [SEP]
 
             return nlnl_res_tokens
 
@@ -199,7 +199,7 @@ class PILinkDataset(Dataset):
                 padding=False,
                 truncation=True,
                 is_split_into_words=True,
-            )
+            ) # [CLS] [tokens] [SEP]
             issue_tokens: dict = self.nlnl_model_tokenizer(
                 issue_nl,
                 return_tensors='pt',
@@ -207,7 +207,7 @@ class PILinkDataset(Dataset):
                 padding=False,
                 truncation=True,
                 is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
-            )
+            ) # [CLS] [tokens] [SEP]
 
             # make paddings
             padding_length = self.max_input_length - issue_tokens['input_ids'].shape[1] - pr_tokens['input_ids'].shape[1] + 1 # '+1' for [CLS] of pr_tokens
@@ -228,7 +228,7 @@ class PILinkDataset(Dataset):
                 'token_type_ids': torch.cat(
                     (pr_tokens['token_type_ids'][0], torch.ones_like(issue_tokens['token_type_ids'][0][1:]), paddings_tokens['token_type_ids'])
                 ),
-            }
+            } # [CLS] [tokens] [SEP] [tokens] [SEP]
 
             return nlnl_res_tokens
 
@@ -263,7 +263,7 @@ class PILinkDataset(Dataset):
             padding=False,
             truncation=True,
             is_split_into_words=False,
-        )
+        ) # [CLS] [tokens] [SEP]
 
         issue_nl_tokens: dict = self.nlpl_model_tokenizer(
             issue_nl,
@@ -272,7 +272,7 @@ class PILinkDataset(Dataset):
             padding=False,
             truncation=True,
             is_split_into_words=True, # https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/tokenizer#transformers.PreTrainedTokenizer.__call__
-        )
+        ) # [CLS] [tokens] [SEP]
 
         # ATTENTION:
         # - RoBERTa doesn’t have token_type_ids (https://huggingface.co/docs/transformers/model_doc/roberta#overview)
@@ -293,6 +293,6 @@ class PILinkDataset(Dataset):
             'attention_mask': torch.cat(
                 (pr_pl_tokens['attention_mask'][0][:-1], issue_nl_tokens['attention_mask'][0][:-1], paddings_tokens['attention_mask'])
             ),
-        }
+        } # [CLS] [tokens] [MSG] [tokens]
 
         return nlpl_res_tokens
