@@ -202,6 +202,7 @@ def main():
             args.nlpl_model_name_or_path,
             device=device
         )
+    tensorboard_writer.add_graph(main_model)
 
     if not args.do_train and not args.do_test:
         raise ValueError('At least one of `do_train`, or `do_test` must be True.')
