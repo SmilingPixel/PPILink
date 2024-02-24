@@ -123,7 +123,11 @@ class PILinkModel(nn.Module):
             nlpl_model_config= nlpl_model.config
         )
 
-        model = cls(config, nlnl_model=nlnl_model).to(device)
+        model = cls(
+            config=config,
+            nlnl_model=nlnl_model,
+            nlpl_model=nlpl_model,
+        ).to(device)
         return model
 
     def forward(self, nlnl_inputs: dict, nlpl_inputs: dict):
