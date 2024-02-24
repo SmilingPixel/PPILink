@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from typing import Dict, List
 
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, confusion_matrix
 
 
 # testing output file schema:
@@ -17,6 +17,7 @@ from sklearn.metrics import classification_report
 
 def generate_test_report(y_true: List[int], y_pred: List[int]) -> Dict:
     report: Dict = classification_report(y_true, y_pred, output_dict=True)
+    report['confusion_matrix'] = confusion_matrix(y_true, y_pred).tolist() # convert to list for json serialization
     return report
 
 
