@@ -1,6 +1,6 @@
 import pathlib
 from pathlib import Path
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
 import torch.nn as nn
 import torch
@@ -28,15 +28,15 @@ class PILinkModel(nn.Module):
 
     def __init__(
         self,
-        config: PILinkModelConfig = PILinkModelConfig(),
-        nlnl_model: Optional[Union[BertModel, RobertaModel]] = None,
-        nlpl_model: Optional[T5EncoderModel] = None
+        config: PILinkModelConfig,
+        nlnl_model: Union[BertModel, RobertaModel],
+        nlpl_model: T5EncoderModel
     ):
         super(PILinkModel, self).__init__()
         self.config: PILinkModelConfig = config
 
-        self.nlpl_model: T5EncoderModel = T5EncoderModel(config.nlpl_model_config) if nlpl_model is None else nlpl_model
-        self.nlnl_model: Union[BertModel, RobertaModel] = RobertaModel(config.nlnl_model_config) if nlnl_model is None else nlnl_model
+        self.nlpl_model: T5EncoderModel = nlpl_model
+        self.nlnl_model: Union[BertModel, RobertaModel] = nlnl_model
 
         # config.linears ignore the first size, which is sum of the NL-NL and NL-PL model hidden sizes,
         # and the last size, which is 1.
@@ -53,6 +53,26 @@ class PILinkModel(nn.Module):
 
         self.linears: nn.Sequential = nn.Sequential(linears_but_last, nn.Linear(([config.nlnl_model_config.hidden_size] + config.linear_sizes)[-1], 1))
 
+    @classmethod
+    def from_config(
+        cls,
+        config: PILinkModelConfig
+    ) -> 'PILinkModel':
+        """
+        Create a new model from the specified config.
+
+        Args:
+            config (PILinkModelConfig): The config for the model.
+
+        Returns:
+            PILinkModel: The new model.
+        """
+
+        nlpl_model: T5EncoderModel = T5EncoderModel(config.nlpl_model_config)
+        nlnl_model: Union[BertModel, RobertaModel] = RobertaModel(config.nlnl_model_config)
+        return cls(config, nlnl_model, nlpl_model)
+    
+    
     @classmethod
     def from_trained_model(
         cls,
@@ -85,7 +105,7 @@ class PILinkModel(nn.Module):
         config: PILinkModelConfig = PILinkModelConfig.from_json_file(config_path)
 
         # load model from config
-        model = cls(config).to(device)
+        model = cls.from_config(config).to(device)
 
         # load model file
         model_path = Path.joinpath(model_name_or_path, "model.pt")
