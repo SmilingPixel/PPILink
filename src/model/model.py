@@ -17,9 +17,9 @@ class PILinkModel(nn.Module):
         nlpl_model (T5EncoderModel): The underlying T5 model for natural language processing (NL-PL pair).
         nlnl_model (Union[BertModel, RobertaModel]): The underlying BERT model for natural language processing (NL-NL pair).
         linears (nn.Sequential): Sequential module for linear layers.
-        sigmoid (nn.Sigmoid): Sigmoid activation function.
 
     Methods:
+        from_config: Create a new model from the specified config.
         from_trained_model: Load a trained model from a specified directory.
         from_pretrained_components: Create a new model. Initializes the NL-NL and NL-PL model from pretrained models.
         forward: Forward pass for the model.
@@ -71,7 +71,6 @@ class PILinkModel(nn.Module):
         nlpl_model: T5EncoderModel = T5EncoderModel(config.nlpl_model_config)
         nlnl_model: Union[BertModel, RobertaModel] = RobertaModel(config.nlnl_model_config)
         return cls(config, nlnl_model, nlpl_model)
-    
     
     @classmethod
     def from_trained_model(
