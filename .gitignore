@@ -38,3 +38,6 @@ cython_debug/
 logs/
 tensorboard_runs/
 runs/
+
+# temp process script
+test_res_process.ipynb
