@@ -225,7 +225,7 @@ def main():
     dataloader: DataLoader = DataLoader(
         dataset,
         batch_size=args.train_batch_size,
-        shuffle=True,
+        shuffle=(args.do_train), # shuffle only when training
     )
 
     loss_fn: nn.Module = nn.BCEWithLogitsLoss()
